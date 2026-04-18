@@ -221,61 +221,138 @@ def marker_color(listing: dict[str, Any]) -> list[int]:
     return [218, 124, 48]
 
 
+def valid_lat_lng(item: dict[str, Any]) -> bool:
+    try:
+        lat = float(item.get("lat"))
+        lng = float(item.get("lng"))
+    except (TypeError, ValueError):
+        return False
+    return -90 <= lat <= 90 and -180 <= lng <= 180
+
+
+def map_view_state(rows: list[dict[str, Any]]) -> dict[str, float]:
+    lats = [float(row["lat"]) for row in rows]
+    lngs = [float(row["lon"]) for row in rows]
+    lat_span = max(lats) - min(lats) if len(lats) > 1 else 0
+    lng_span = max(lngs) - min(lngs) if len(lngs) > 1 else 0
+    span = max(lat_span, lng_span)
+    if span <= 0.01:
+        zoom = 13
+    elif span <= 0.03:
+        zoom = 12
+    elif span <= 0.08:
+        zoom = 11
+    elif span <= 0.18:
+        zoom = 10
+    elif span <= 0.40:
+        zoom = 9
+    else:
+        zoom = 8
+    return {
+        "latitude": sum(lats) / len(lats),
+        "longitude": sum(lngs) / len(lngs),
+        "zoom": zoom,
+    }
+
+
 def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any]) -> None:
     st.subheader("Map")
-    map_rows = []
+    choices = {f"{item['address']} ({item['review_status']})": item["id"] for item in scored}
+    if choices:
+        selected_id = st.session_state.get("selected_listing_id")
+        choice_labels = list(choices.keys())
+        selected_index = 0
+        if selected_id in choices.values():
+            selected_index = list(choices.values()).index(selected_id)
+        selected = st.selectbox("Select property from map", choice_labels, index=selected_index)
+        st.session_state["selected_listing_id"] = choices[selected]
+
+    selected_listing_id = st.session_state.get("selected_listing_id")
+    property_rows = []
+    missing_coordinate_rows = []
     for listing in scored:
-        if listing.get("lat") is not None and listing.get("lng") is not None:
-            map_rows.append(
+        if valid_lat_lng(listing):
+            is_selected = listing["id"] == selected_listing_id
+            property_rows.append(
                 {
-                    "lat": listing["lat"],
-                    "lon": listing["lng"],
+                    "lat": float(listing["lat"]),
+                    "lon": float(listing["lng"]),
                     "address": listing["address"],
-                    "state": listing["review_status"],
-                    "color": marker_color(listing),
+                    "state": "selected property" if is_selected else listing["review_status"],
+                    "color": [255, 214, 74] if is_selected else marker_color(listing),
+                    "line_color": [20, 20, 20] if is_selected else [255, 255, 255],
+                    "radius": 260 if is_selected else 190,
                 }
             )
+        else:
+            missing_coordinate_rows.append(listing)
+
+    destination_rows = []
     for key, destination in settings["destination_definitions"].items():
-        if destination.get("lat") is not None and destination.get("lng") is not None:
-            map_rows.append(
+        if valid_lat_lng(destination):
+            destination_rows.append(
                 {
-                    "lat": destination["lat"],
-                    "lon": destination["lng"],
+                    "lat": float(destination["lat"]),
+                    "lon": float(destination["lng"]),
                     "address": destination.get("label", key),
                     "state": "destination",
                     "color": [140, 52, 160],
+                    "line_color": [255, 255, 255],
+                    "radius": 120,
                 }
             )
+
+    if missing_coordinate_rows:
+        with st.expander(f"{len(missing_coordinate_rows)} listing(s) missing map coordinates"):
+            st.write([listing["address"] for listing in missing_coordinate_rows])
+
+    map_rows = property_rows + destination_rows
     if map_rows:
         try:
             import pydeck as pdk
 
+            view = map_view_state(property_rows or map_rows)
+            layers = [
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=destination_rows,
+                    get_position="[lon, lat]",
+                    get_fill_color="color",
+                    get_line_color="line_color",
+                    get_radius="radius",
+                    radius_min_pixels=8,
+                    radius_max_pixels=18,
+                    stroked=True,
+                    line_width_min_pixels=2,
+                    pickable=True,
+                ),
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=property_rows,
+                    get_position="[lon, lat]",
+                    get_fill_color="color",
+                    get_line_color="line_color",
+                    get_radius="radius",
+                    radius_min_pixels=12,
+                    radius_max_pixels=30,
+                    stroked=True,
+                    line_width_min_pixels=2,
+                    pickable=True,
+                ),
+            ]
             st.pydeck_chart(
                 pdk.Deck(
                     map_style=None,
-                    initial_view_state=pdk.ViewState(latitude=-27.47, longitude=153.03, zoom=10),
-                    layers=[
-                        pdk.Layer(
-                            "ScatterplotLayer",
-                            data=map_rows,
-                            get_position="[lon, lat]",
-                            get_fill_color="color",
-                            get_radius=120,
-                            pickable=True,
-                        )
-                    ],
+                    initial_view_state=pdk.ViewState(**view),
+                    layers=layers,
                     tooltip={"text": "{address}\n{state}"},
                 )
             )
         except ImportError:
             st.map(pd.DataFrame(map_rows), latitude="lat", longitude="lon")
+        st.caption("Property markers are larger circles; destination markers are smaller purple circles; the selected property is yellow.")
     else:
-        st.info("Add lat/lng to listings to show property markers. Destination markers are available from settings.")
-
-    choices = {f"{item['address']} ({item['review_status']})": item["id"] for item in scored}
-    if choices:
-        selected = st.selectbox("Select property from map", list(choices.keys()))
-        st.session_state["selected_listing_id"] = choices[selected]
+        st.info("No property or destination coordinates are available for the map.")
 
 
 def table_rows(scored: list[dict[str, Any]]) -> pd.DataFrame:
