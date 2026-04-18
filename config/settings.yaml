@@ -1,4 +1,5 @@
-price_cap: 800000
+price_target: 700000
+price_stretch_cap: 800000
 hard_gates:
   bedrooms_min: 2
 ranking_priorities:
@@ -14,6 +15,8 @@ commute_destinations:
   - name: candace_work_chermside
     address: "35 Thomas St, Chermside"
 notes:
+  - "700k is the target price point."
+  - "800k is a stretch cap for clearly stronger trade-off cases."
   - "Everything beyond the hard gate is primarily ranking and trade-off logic."
   - "Good land value is a major priority."
   - "Good location with future potential / capital growth matters."
