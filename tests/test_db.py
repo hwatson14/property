@@ -150,6 +150,8 @@ def test_import_export_round_trip_preserves_critical_fields():
     row = db.get_listing(next_conn, "apt_west_end_high_bodycorp")
 
     assert row["price_text_raw"] == "Mid $700s"
+    assert row["lat"] == -27.4790
+    assert row["lng"] == 153.0097
     assert row["price_comparison_value"] == 745000
     assert row["assumed_purchase_price"] == 760000
     assert "weekday_am_peak" in row["manual_commute_inputs_json"]

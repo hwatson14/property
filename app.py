@@ -255,7 +255,7 @@ def map_view_state(rows: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any]) -> None:
+def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=None) -> None:
     st.subheader("Map")
     choices = {f"{item['address']} ({item['review_status']})": item["id"] for item in scored}
     if choices:
@@ -305,6 +305,26 @@ def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any]) -> No
     if missing_coordinate_rows:
         with st.expander(f"{len(missing_coordinate_rows)} listing(s) missing map coordinates"):
             st.write([listing["address"] for listing in missing_coordinate_rows])
+            selected_missing = next(
+                (listing for listing in missing_coordinate_rows if listing["id"] == selected_listing_id),
+                None,
+            )
+            if selected_missing and conn is not None:
+                with st.form("map_coordinate_entry"):
+                    st.caption(f"Add manual coordinates for {selected_missing['address']}")
+                    lat_text = st.text_input("Latitude")
+                    lng_text = st.text_input("Longitude")
+                    if st.form_submit_button("Save coordinates"):
+                        save_listing(
+                            conn,
+                            {
+                                **selected_missing,
+                                "lat": optional_float(lat_text),
+                                "lng": optional_float(lng_text),
+                            },
+                        )
+            elif conn is not None:
+                st.caption("Select one of these listings above to add manual coordinates here.")
 
     map_rows = property_rows + destination_rows
     if map_rows:
@@ -607,7 +627,7 @@ def main() -> None:
     st.title("Brisbane Property Decision Cockpit")
     map_tab, compare_tab, verification_tab = st.tabs(["Map", "Compare", "Verification"])
     with map_tab:
-        render_map_tab(scored, settings)
+        render_map_tab(scored, settings, conn)
     with compare_tab:
         render_compare_tab(scored_ranked, scored, listings, settings, preset_name, weight_overrides)
     with verification_tab:

@@ -1,3 +1,6 @@
+import csv
+from pathlib import Path
+
 from app import map_view_state, valid_lat_lng
 
 
@@ -25,3 +28,11 @@ def test_map_view_state_zooms_in_for_single_marker():
     view = map_view_state([{"lat": -27.45, "lon": 153.00}])
 
     assert view == {"latitude": -27.45, "longitude": 153.00, "zoom": 13}
+
+
+def test_golden_fixture_listings_have_valid_manual_coordinates():
+    with Path("tests/fixtures/golden_listings.csv").open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert rows
+    assert all(valid_lat_lng(row) for row in rows)
