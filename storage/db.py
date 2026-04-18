@@ -78,6 +78,37 @@ NUMERIC_COLUMNS = {
     "manual_land_value_override_score",
 }
 
+PROVIDER_UPDATE_FIELDS = [
+    "source",
+    "url",
+    "address",
+    "suburb",
+    "postcode",
+    "lat",
+    "lng",
+    "property_type",
+    "beds",
+    "baths",
+    "cars",
+    "land_size_m2",
+    "internal_size_m2",
+    "body_corporate_pa",
+    "price_text_raw",
+]
+
+MANUAL_TRUTH_FIELDS = [
+    "price_comparison_value",
+    "assumed_purchase_price",
+    "manual_commute_inputs_json",
+    "manual_land_value_estimate",
+    "manual_land_value_confidence",
+    "manual_land_value_notes",
+    "manual_land_value_override_score",
+    "review_status",
+    "shortlist_status",
+    "notes",
+]
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -244,6 +275,38 @@ def get_listing(conn, listing_id: str) -> dict[str, Any] | None:
     return row_to_dict(row) if row else None
 
 
+def find_existing_listing_for_ingest(conn, data: dict[str, Any]) -> dict[str, Any] | None:
+    mark = placeholder(conn)
+    url = data.get("url")
+    if url:
+        row = conn.execute(
+            f"SELECT {', '.join(LISTING_COLUMNS)} FROM listings WHERE url = {mark}",
+            (url,),
+        ).fetchone()
+        if row:
+            return row_to_dict(row)
+
+    address = data.get("address")
+    suburb = data.get("suburb")
+    postcode = data.get("postcode")
+    source = data.get("source")
+    if address and suburb and source:
+        row = conn.execute(
+            f"""
+            SELECT {', '.join(LISTING_COLUMNS)}
+            FROM listings
+            WHERE source = {mark}
+              AND lower(address) = lower({mark})
+              AND lower(suburb) = lower({mark})
+              AND coalesce(postcode, '') = coalesce({mark}, '')
+            """,
+            (source, address, suburb, postcode),
+        ).fetchone()
+        if row:
+            return row_to_dict(row)
+    return None
+
+
 def upsert_listing(conn, data: dict[str, Any]) -> dict[str, Any]:
     existing = get_listing(conn, data["id"]) if data.get("id") else None
     listing = _normalise_listing({**(existing or {}), **data}, for_insert=existing is None)
@@ -259,6 +322,21 @@ def upsert_listing(conn, data: dict[str, Any]) -> dict[str, Any]:
     )
     conn.commit()
     return listing
+
+
+def ingest_listing(conn, data: dict[str, Any]) -> dict[str, Any]:
+    existing = find_existing_listing_for_ingest(conn, data)
+    if not existing and data.get("id"):
+        existing = get_listing(conn, data["id"])
+    if existing:
+        merged = dict(existing)
+        for field in PROVIDER_UPDATE_FIELDS:
+            if field in data and data[field] not in (None, ""):
+                merged[field] = data[field]
+        for field in MANUAL_TRUTH_FIELDS:
+            merged[field] = existing.get(field)
+        return upsert_listing(conn, merged)
+    return upsert_listing(conn, data)
 
 
 def delete_listing(conn, listing_id: str) -> None:
