@@ -1,9 +1,16 @@
 import sqlite3
 import json
 
+import pytest
+
 from connectors.domain import (
     brisbane_residential_search_payload,
+    DEFAULT_DOMAIN_RESIDENTIAL_SEARCH_URL,
+    DOMAIN_API_KEY_ENV_VAR,
+    DOMAIN_SEARCH_URL_ENV_VAR,
+    domain_api_key_from_env,
     domain_listing_to_listing,
+    domain_search_url_from_env,
     extract_domain_listing_payloads,
     fetch_domain_residential_search,
     import_domain_search,
@@ -150,6 +157,25 @@ def test_brisbane_residential_search_payload_is_sale_only_and_location_based():
             },
         ],
     }
+
+
+def test_domain_retrieval_configuration_uses_explicit_env_vars(monkeypatch):
+    monkeypatch.setenv(DOMAIN_API_KEY_ENV_VAR, "key_live")
+    monkeypatch.delenv(DOMAIN_SEARCH_URL_ENV_VAR, raising=False)
+
+    assert domain_api_key_from_env() == "key_live"
+    assert domain_search_url_from_env() == DEFAULT_DOMAIN_RESIDENTIAL_SEARCH_URL
+
+    monkeypatch.setenv(DOMAIN_SEARCH_URL_ENV_VAR, "https://example.test/domain-search")
+
+    assert domain_search_url_from_env() == "https://example.test/domain-search"
+
+
+def test_domain_retrieval_fails_closed_without_api_key(monkeypatch):
+    monkeypatch.delenv(DOMAIN_API_KEY_ENV_VAR, raising=False)
+
+    with pytest.raises(RuntimeError, match=DOMAIN_API_KEY_ENV_VAR):
+        domain_api_key_from_env()
 
 
 def test_extract_domain_listing_payloads_unwraps_property_listing_results():
