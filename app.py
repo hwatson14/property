@@ -279,8 +279,25 @@ def selected_listing_id_from_map_event(event: Any, property_rows: list[dict[str,
     return selection_value(selected_properties[0], "id")
 
 
+def pending_map_selected_listing_id(event: Any, property_rows: list[dict[str, Any]], last_applied_id: str | None) -> str | None:
+    clicked_listing_id = selected_listing_id_from_map_event(event, property_rows)
+    if clicked_listing_id and clicked_listing_id != last_applied_id:
+        return clicked_listing_id
+    return None
+
+
 def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=None) -> None:
     st.subheader("Map")
+    map_selection_rows = [{"id": listing["id"]} for listing in scored if valid_lat_lng(listing)]
+    pending_selected_id = pending_map_selected_listing_id(
+        st.session_state.get("property_map"),
+        map_selection_rows,
+        st.session_state.get("last_applied_map_selection_id"),
+    )
+    if pending_selected_id:
+        st.session_state["selected_listing_id"] = pending_selected_id
+        st.session_state["last_applied_map_selection_id"] = pending_selected_id
+
     choices = {f"{item['address']} ({item['review_status']})": item["id"] for item in scored}
     if choices:
         selected_id = st.session_state.get("selected_listing_id")
@@ -401,7 +418,7 @@ def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=
             clicked_listing_id = selected_listing_id_from_map_event(event, property_rows)
             if clicked_listing_id and clicked_listing_id != st.session_state.get("selected_listing_id"):
                 st.session_state["selected_listing_id"] = clicked_listing_id
-                st.rerun()
+                st.session_state["last_applied_map_selection_id"] = clicked_listing_id
         except ImportError:
             st.map(pd.DataFrame(map_rows), latitude="lat", longitude="lon")
         st.caption("Property markers are larger circles; destination markers are smaller purple circles; the selected property is yellow.")

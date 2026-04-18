@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 
-from app import map_view_state, selected_listing_id_from_map_event, valid_lat_lng
+from app import map_view_state, pending_map_selected_listing_id, selected_listing_id_from_map_event, valid_lat_lng
 
 
 def test_valid_lat_lng_accepts_numeric_values_and_rejects_missing_or_invalid_values():
@@ -112,3 +112,37 @@ def test_selected_listing_id_from_map_event_falls_back_to_selected_index():
     ]
 
     assert selected_listing_id_from_map_event(event, property_rows) == "second"
+
+
+def test_pending_map_selected_listing_id_applies_new_marker_selection_once():
+    event = {
+        "selection": {
+            "objects": {
+                "property-markers": [
+                    {
+                        "id": "house_camp_hill_value",
+                    }
+                ]
+            }
+        }
+    }
+
+    assert pending_map_selected_listing_id(event, [], None) == "house_camp_hill_value"
+    assert pending_map_selected_listing_id(event, [], "house_camp_hill_value") is None
+
+
+def test_pending_map_selected_listing_id_uses_index_fallback_rows():
+    event = {
+        "selection": {
+            "objects": {},
+            "indices": {
+                "property-markers": [1],
+            },
+        }
+    }
+    property_rows = [
+        {"id": "first"},
+        {"id": "second"},
+    ]
+
+    assert pending_map_selected_listing_id(event, property_rows, None) == "second"
