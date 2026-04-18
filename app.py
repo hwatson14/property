@@ -255,6 +255,30 @@ def map_view_state(rows: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
+def selection_value(container: Any, key: str, default: Any = None) -> Any:
+    if container is None:
+        return default
+    if hasattr(container, "get"):
+        return container.get(key, default)
+    return getattr(container, key, default)
+
+
+def selected_listing_id_from_map_event(event: Any, property_rows: list[dict[str, Any]] | None = None) -> str | None:
+    if not event:
+        return None
+    selection = selection_value(event, "selection", {})
+    objects = selection_value(selection, "objects", {})
+    selected_properties = selection_value(objects, "property-markers", [])
+    if not selected_properties:
+        indices = selection_value(selection_value(selection, "indices", {}), "property-markers", [])
+        if property_rows and indices:
+            index = indices[0]
+            if 0 <= index < len(property_rows):
+                return property_rows[index].get("id")
+        return None
+    return selection_value(selected_properties[0], "id")
+
+
 def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=None) -> None:
     st.subheader("Map")
     choices = {f"{item['address']} ({item['review_status']})": item["id"] for item in scored}
@@ -277,6 +301,7 @@ def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=
                 {
                     "lat": float(listing["lat"]),
                     "lon": float(listing["lng"]),
+                    "id": listing["id"],
                     "address": listing["address"],
                     "state": "selected property" if is_selected else listing["review_status"],
                     "color": [255, 214, 74] if is_selected else marker_color(listing),
@@ -335,6 +360,7 @@ def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=
             layers = [
                 pdk.Layer(
                     "ScatterplotLayer",
+                    id="destination-markers",
                     data=destination_rows,
                     get_position="[lon, lat]",
                     get_fill_color="color",
@@ -344,10 +370,11 @@ def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=
                     radius_max_pixels=18,
                     stroked=True,
                     line_width_min_pixels=2,
-                    pickable=True,
+                    pickable=False,
                 ),
                 pdk.Layer(
                     "ScatterplotLayer",
+                    id="property-markers",
                     data=property_rows,
                     get_position="[lon, lat]",
                     get_fill_color="color",
@@ -360,14 +387,21 @@ def render_map_tab(scored: list[dict[str, Any]], settings: dict[str, Any], conn=
                     pickable=True,
                 ),
             ]
-            st.pydeck_chart(
+            event = st.pydeck_chart(
                 pdk.Deck(
                     map_style=None,
                     initial_view_state=pdk.ViewState(**view),
                     layers=layers,
                     tooltip={"text": "{address}\n{state}"},
-                )
+                ),
+                key="property_map",
+                on_select="rerun",
+                selection_mode="single-object",
             )
+            clicked_listing_id = selected_listing_id_from_map_event(event, property_rows)
+            if clicked_listing_id and clicked_listing_id != st.session_state.get("selected_listing_id"):
+                st.session_state["selected_listing_id"] = clicked_listing_id
+                st.rerun()
         except ImportError:
             st.map(pd.DataFrame(map_rows), latitude="lat", longitude="lon")
         st.caption("Property markers are larger circles; destination markers are smaller purple circles; the selected property is yellow.")
