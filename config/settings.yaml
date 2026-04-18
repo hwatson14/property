@@ -1,5 +1,22 @@
 price_cap: 800000
-areas: []
-dealbreakers: []
-destinations: []
-notes: "Minimal shared settings for the chat-driven property workflow."
+hard_gates:
+  bedrooms_min: 2
+ranking_priorities:
+  - land_value
+  - commute
+  - location_quality_and_capital_growth
+  - light_renovation_potential
+commute_destinations:
+  - name: harry_work
+    address: "181 Hyde Rd, Yeronga"
+  - name: candace_work_newstead
+    address: "Gasworks, Newstead"
+  - name: candace_work_chermside
+    address: "35 Thomas St, Chermside"
+notes:
+  - "Everything beyond the hard gate is primarily ranking and trade-off logic."
+  - "Good land value is a major priority."
+  - "Good location with future potential / capital growth matters."
+  - "Small renovation upside is a positive, not a hard requirement."
+open_checks:
+  - "Confirm whether Harry work address should be 181 Hyde Rd or 187 Hyde Rd, Yeronga."
