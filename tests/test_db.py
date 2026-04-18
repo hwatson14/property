@@ -13,7 +13,8 @@ def memory_conn():
     return conn
 
 
-def test_configured_db_path_uses_deployment_environment_variable(monkeypatch, tmp_path):
+def test_configured_db_path_uses_local_fallback_environment_variable(monkeypatch, tmp_path):
+    monkeypatch.delenv(db.DB_URL_ENV_VAR, raising=False)
     configured_path = tmp_path / "shared" / "property.sqlite3"
     monkeypatch.setenv(db.DB_PATH_ENV_VAR, str(configured_path))
 
@@ -40,6 +41,20 @@ def test_configured_db_path_uses_deployment_environment_variable(monkeypatch, tm
     next_conn = db.connect()
     db.init_db(next_conn)
     assert [row["address"] for row in db.list_listings(next_conn)] == ["1 Shared Path St"]
+
+
+def test_connect_uses_hosted_database_url_when_configured(monkeypatch):
+    calls = []
+
+    def fake_connect_postgres(database_url):
+        calls.append(database_url)
+        return "postgres-connection"
+
+    monkeypatch.setenv(db.DB_URL_ENV_VAR, "postgresql://example")
+    monkeypatch.setattr(db, "connect_postgres", fake_connect_postgres)
+
+    assert db.connect() == "postgres-connection"
+    assert calls == ["postgresql://example"]
 
 
 def test_import_export_round_trip_preserves_critical_fields():

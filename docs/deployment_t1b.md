@@ -1,129 +1,79 @@
-# T1B Render Deployment Notes
+# T1B Free Deployment Notes
 
 ## Purpose
 
 T1B deploys the accepted T1A Streamlit shell for shared use without changing the product contract.
 
-## Target Host
+This free-hosting pivot stops the paid Render persistent-disk path.
 
-- Host: Render
-- Service type: Web Service
-- Runtime: Python
-- Plan: `starter` or higher
-- Storage: Render persistent disk
-- Storage model: SQLite, unchanged from T1A
+## Target
 
-Render requirements used here:
-
-- Persistent disks require a paid Render web service, private service, or background worker.
-- Only files under the disk mount path survive deploys/restarts.
-- A Render web service must bind to `0.0.0.0` and should use the `PORT` environment variable.
-
-## Runtime
-
+- App host: Streamlit Community Cloud
+- Hosted DB: Supabase free Postgres
 - App entrypoint: `app.py`
-- Build command: `pip install -r requirements.txt`
-- Start command: `streamlit run app.py --server.address 0.0.0.0 --server.port $PORT`
-- Python: 3.11+
-- Dependencies: `requirements.txt`
+- Dependency file: `requirements.txt`
+- Storage model: hosted Postgres for deployment, local SQLite fallback for development/tests
 
-The repo includes `render.yaml` for the fastest path:
+No providers, auth, formula changes, new pages, or workflow changes are part of T1B.
 
-```yaml
-services:
-  - type: web
-    runtime: python
-    name: brisbane-property-cockpit
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT
-    disk:
-      name: property-cockpit-data
-      mountPath: /var/data
-      sizeGB: 5
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: PROPERTY_COCKPIT_DB_PATH
-        value: /var/data/property_cockpit.sqlite3
+## Required Secret
+
+Set this Streamlit Community Cloud secret:
+
+```toml
+PROPERTY_COCKPIT_DATABASE_URL = "postgresql://postgres.PROJECT_REF:PASSWORD@HOST:PORT/postgres"
 ```
 
-## Persistence
+Use the Supabase pooled connection string from Project Settings -> Database -> Connection string.
 
-The app still persists exactly two logical tables:
+The app reads this value as the environment variable:
 
-- `listings`
-- `settings`
+```text
+PROPERTY_COCKPIT_DATABASE_URL
+```
 
-DB access remains isolated to `storage/db.py`.
-
-By default, local/dev mode uses:
+If the variable is absent, the app falls back to local SQLite at:
 
 ```text
 data/property_cockpit.sqlite3
 ```
 
-For the Render deployment, use this exact persistent disk mount path:
+That fallback is for local development and tests only, not shared hosted persistence.
+
+## Deployment Procedure
+
+1. Create a Supabase project on the free plan.
+2. In Supabase, open Project Settings -> Database -> Connection string.
+3. Copy the pooled Postgres connection string and replace the password placeholder.
+4. Push this repo to GitHub.
+5. In Streamlit Community Cloud, create a new app from the repo.
+6. Set the main file path to:
 
 ```text
-/var/data
+app.py
 ```
 
-Use this exact environment variable value:
+7. In Streamlit app secrets, add:
 
-```text
-PROPERTY_COCKPIT_DB_PATH=/var/data/property_cockpit.sqlite3
+```toml
+PROPERTY_COCKPIT_DATABASE_URL = "postgresql://postgres.PROJECT_REF:PASSWORD@HOST:PORT/postgres"
 ```
 
-Do not point this at ephemeral container storage if persistence across restart/redeploy is required.
+8. Deploy the app.
 
-## Render Setup
-
-1. Push the repo with `render.yaml` to GitHub.
-2. In Render, create a new Blueprint from the repo. Do not create a static site.
-3. Confirm service name: `brisbane-property-cockpit`.
-4. Confirm service type: Web Service.
-5. Confirm runtime: Python.
-6. Confirm plan: `starter` or higher. Do not use the free plan because persistent disks are required.
-7. Confirm instance count remains one. Render persistent disks attach to one running service instance.
-8. Confirm build command:
-
-```text
-pip install -r requirements.txt
-```
-
-9. Confirm start command:
-
-```text
-streamlit run app.py --server.address 0.0.0.0 --server.port $PORT
-```
-
-10. Confirm persistent disk:
-    - name: `property-cockpit-data`
-    - mount path: `/var/data`
-    - size: `5 GB`
-11. Confirm environment variables:
-    - `PYTHON_VERSION=3.11.9`
-    - `PROPERTY_COCKPIT_DB_PATH=/var/data/property_cockpit.sqlite3`
-12. Deploy.
-
-The SQLite file is created at runtime. The disk is not needed during the build command.
-
-## Access Control
-
-T1B does not add app-code auth. Keep access control at the deployment/platform layer unless a future tranche explicitly changes that contract.
+The app creates the `listings` and `settings` tables on first startup.
 
 ## Smoke Checklist
 
-Before accepting T1B in a hosted environment:
+Before accepting T1B in the hosted environment:
 
-1. Open the deployed `.onrender.com` app as Harry.
+1. Open the deployed Streamlit app as Harry.
 2. Open the same deployed app as Candace.
 3. Confirm the app is still one page with Map / Compare / Verification tabs.
 4. Add a manual property and reload the app.
 5. Confirm the property remains after reload.
-6. Restart or redeploy the app.
-7. Confirm listings and settings survive restart/redeploy.
+6. Restart/reboot the Streamlit app.
+7. Confirm listings and settings survive restart.
 8. Import `tests/fixtures/golden_listings.csv`.
 9. Confirm CSV export includes the imported listings.
 10. Confirm default Compare excludes `house_morningside_incomplete`.
@@ -140,3 +90,4 @@ T1B does not add:
 - new pages or tabs
 - formula changes
 - workflow redesign
+- T2 or T3 behaviour

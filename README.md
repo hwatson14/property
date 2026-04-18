@@ -18,19 +18,19 @@ Help two users decide where to buy by combining:
 - computed scores
 - rankability gating
 
-## T1B deployment
+## T1B free deployment
 Run locally with:
 
 ```powershell
 streamlit run app.py
 ```
 
-For Render shared deployment, use the included `render.yaml`.
+For free shared deployment, use Streamlit Community Cloud plus Supabase free Postgres.
 
-Exact persistent SQLite path:
+Set this Streamlit secret:
 
-```text
-PROPERTY_COCKPIT_DB_PATH=/var/data/property_cockpit.sqlite3
+```toml
+PROPERTY_COCKPIT_DATABASE_URL = "postgresql://postgres.PROJECT_REF:PASSWORD@HOST:PORT/postgres"
 ```
 
 See `docs/deployment_t1b.md`.

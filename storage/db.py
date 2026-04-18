@@ -1,4 +1,9 @@
-"""SQLite persistence and CSV helpers for T1A/T1B."""
+"""Persistence and CSV helpers for T1A/T1B.
+
+T1B free hosting uses hosted Postgres through PROPERTY_COCKPIT_DATABASE_URL.
+SQLite remains only as the local/test fallback so the product can run without a
+remote database during development.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +28,7 @@ from core.scoring import (
 
 DB_PATH = Path("data/property_cockpit.sqlite3")
 DB_PATH_ENV_VAR = "PROPERTY_COCKPIT_DB_PATH"
+DB_URL_ENV_VAR = "PROPERTY_COCKPIT_DATABASE_URL"
 
 LISTING_COLUMNS = [
     "id",
@@ -77,17 +83,48 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def configured_database_url() -> str | None:
+    """Return the hosted Postgres URL used by free hosted deployments."""
+    return os.environ.get(DB_URL_ENV_VAR)
+
+
 def configured_db_path() -> Path:
-    """Return the SQLite DB path for local or deployed shared persistence."""
+    """Return the local SQLite DB path used only for local/test fallback."""
     return Path(os.environ.get(DB_PATH_ENV_VAR, DB_PATH))
 
 
-def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
+def connect(db_path: str | Path | None = None):
+    database_url = configured_database_url()
+    if db_path is None and database_url:
+        return connect_postgres(database_url)
+    return connect_sqlite(db_path)
+
+
+def connect_sqlite(db_path: str | Path | None = None) -> sqlite3.Connection:
     path = Path(db_path) if db_path is not None else configured_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def connect_postgres(database_url: str):
+    import psycopg
+    from psycopg.rows import dict_row
+
+    return psycopg.connect(database_url, row_factory=dict_row)
+
+
+def is_postgres(conn) -> bool:
+    return conn.__class__.__module__.startswith("psycopg")
+
+
+def placeholder(conn) -> str:
+    return "%s" if is_postgres(conn) else "?"
+
+
+def row_to_dict(row: Any) -> dict[str, Any]:
+    return dict(row)
 
 
 def init_db(conn: sqlite3.Connection) -> None:
@@ -194,21 +231,22 @@ def validate_listing(listing: dict[str, Any]) -> None:
 
 def list_listings(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = conn.execute(f"SELECT {', '.join(LISTING_COLUMNS)} FROM listings ORDER BY created_at, address").fetchall()
-    return [dict(row) for row in rows]
+    return [row_to_dict(row) for row in rows]
 
 
 def get_listing(conn: sqlite3.Connection, listing_id: str) -> dict[str, Any] | None:
+    mark = placeholder(conn)
     row = conn.execute(
-        f"SELECT {', '.join(LISTING_COLUMNS)} FROM listings WHERE id = ?",
+        f"SELECT {', '.join(LISTING_COLUMNS)} FROM listings WHERE id = {mark}",
         (listing_id,),
     ).fetchone()
-    return dict(row) if row else None
+    return row_to_dict(row) if row else None
 
 
 def upsert_listing(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
     existing = get_listing(conn, data["id"]) if data.get("id") else None
     listing = _normalise_listing({**(existing or {}), **data}, for_insert=existing is None)
-    placeholders = ", ".join(["?"] * len(LISTING_COLUMNS))
+    placeholders = ", ".join([placeholder(conn)] * len(LISTING_COLUMNS))
     update_clause = ", ".join([f"{column}=excluded.{column}" for column in LISTING_COLUMNS if column != "id"])
     conn.execute(
         f"""
@@ -223,21 +261,22 @@ def upsert_listing(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, 
 
 
 def delete_listing(conn: sqlite3.Connection, listing_id: str) -> None:
-    conn.execute("DELETE FROM listings WHERE id = ?", (listing_id,))
+    conn.execute(f"DELETE FROM listings WHERE id = {placeholder(conn)}", (listing_id,))
     conn.commit()
 
 
 def load_settings(conn: sqlite3.Connection) -> dict[str, Any]:
     ensure_default_settings(conn)
     rows = conn.execute("SELECT key, value_json FROM settings").fetchall()
-    return {row["key"]: json.loads(row["value_json"]) for row in rows}
+    return {row_to_dict(row)["key"]: json.loads(row_to_dict(row)["value_json"]) for row in rows}
 
 
 def save_setting(conn: sqlite3.Connection, key: str, value: Any) -> None:
+    mark = placeholder(conn)
     conn.execute(
-        """
+        f"""
         INSERT INTO settings (key, value_json)
-        VALUES (?, ?)
+        VALUES ({mark}, {mark})
         ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json
         """,
         (key, json.dumps(value, sort_keys=True)),
