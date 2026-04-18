@@ -127,7 +127,7 @@ def row_to_dict(row: Any) -> dict[str, Any]:
     return dict(row)
 
 
-def init_db(conn: sqlite3.Connection) -> None:
+def init_db(conn) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS listings (
@@ -174,12 +174,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     ensure_default_settings(conn)
 
 
-def ensure_default_settings(conn: sqlite3.Connection) -> None:
-    existing = {row["key"] for row in conn.execute("SELECT key FROM settings").fetchall()}
+def ensure_default_settings(conn) -> None:
+    mark = placeholder(conn)
+    existing = {row_to_dict(row)["key"] for row in conn.execute("SELECT key FROM settings").fetchall()}
     for key, value in default_settings().items():
         if key not in existing:
             conn.execute(
-                "INSERT INTO settings (key, value_json) VALUES (?, ?)",
+                f"INSERT INTO settings (key, value_json) VALUES ({mark}, {mark})",
                 (key, json.dumps(value, sort_keys=True)),
             )
     conn.commit()
@@ -229,12 +230,12 @@ def validate_listing(listing: dict[str, Any]) -> None:
             raise ValueError("manual_commute_inputs_json must be a JSON object")
 
 
-def list_listings(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+def list_listings(conn) -> list[dict[str, Any]]:
     rows = conn.execute(f"SELECT {', '.join(LISTING_COLUMNS)} FROM listings ORDER BY created_at, address").fetchall()
     return [row_to_dict(row) for row in rows]
 
 
-def get_listing(conn: sqlite3.Connection, listing_id: str) -> dict[str, Any] | None:
+def get_listing(conn, listing_id: str) -> dict[str, Any] | None:
     mark = placeholder(conn)
     row = conn.execute(
         f"SELECT {', '.join(LISTING_COLUMNS)} FROM listings WHERE id = {mark}",
@@ -243,7 +244,7 @@ def get_listing(conn: sqlite3.Connection, listing_id: str) -> dict[str, Any] | N
     return row_to_dict(row) if row else None
 
 
-def upsert_listing(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
+def upsert_listing(conn, data: dict[str, Any]) -> dict[str, Any]:
     existing = get_listing(conn, data["id"]) if data.get("id") else None
     listing = _normalise_listing({**(existing or {}), **data}, for_insert=existing is None)
     placeholders = ", ".join([placeholder(conn)] * len(LISTING_COLUMNS))
@@ -260,18 +261,18 @@ def upsert_listing(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, 
     return listing
 
 
-def delete_listing(conn: sqlite3.Connection, listing_id: str) -> None:
+def delete_listing(conn, listing_id: str) -> None:
     conn.execute(f"DELETE FROM listings WHERE id = {placeholder(conn)}", (listing_id,))
     conn.commit()
 
 
-def load_settings(conn: sqlite3.Connection) -> dict[str, Any]:
+def load_settings(conn) -> dict[str, Any]:
     ensure_default_settings(conn)
     rows = conn.execute("SELECT key, value_json FROM settings").fetchall()
     return {row_to_dict(row)["key"]: json.loads(row_to_dict(row)["value_json"]) for row in rows}
 
 
-def save_setting(conn: sqlite3.Connection, key: str, value: Any) -> None:
+def save_setting(conn, key: str, value: Any) -> None:
     mark = placeholder(conn)
     conn.execute(
         f"""
@@ -284,7 +285,7 @@ def save_setting(conn: sqlite3.Connection, key: str, value: Any) -> None:
     conn.commit()
 
 
-def export_csv(conn: sqlite3.Connection) -> str:
+def export_csv(conn) -> str:
     output = StringIO()
     writer = csv.DictWriter(output, fieldnames=CSV_COLUMNS, lineterminator="\n")
     writer.writeheader()
@@ -294,7 +295,7 @@ def export_csv(conn: sqlite3.Connection) -> str:
     return output.getvalue()
 
 
-def import_csv(conn: sqlite3.Connection, csv_text: str, replace: bool = False) -> list[dict[str, Any]]:
+def import_csv(conn, csv_text: str, replace: bool = False) -> list[dict[str, Any]]:
     reader = csv.DictReader(StringIO(csv_text))
     if reader.fieldnames is None:
         raise ValueError("CSV has no header")
