@@ -25,9 +25,48 @@ st.set_page_config(page_title="Brisbane Property Decision Cockpit", layout="wide
 
 
 def get_conn():
+    if "db_conn" in st.session_state:
+        return st.session_state["db_conn"]
     conn = db.connect()
     db.init_db(conn)
+    st.session_state["db_conn"] = conn
     return conn
+
+
+@st.cache_data(show_spinner=False, ttl=30)
+def cached_load_app_state(_conn, data_version: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    return services.load_app_state(_conn)
+
+
+@st.cache_data(show_spinner=False)
+def cached_prepare_listings_view(
+    listings: list[dict[str, Any]],
+    settings: dict[str, Any],
+    preset_name: str | None,
+    weight_overrides: dict[str, float],
+) -> list[dict[str, Any]]:
+    return services.prepare_listings_view(listings, settings, preset_name, weight_overrides)
+
+
+@st.cache_data(show_spinner=False)
+def cached_prepare_ranked_view(
+    listings: list[dict[str, Any]],
+    settings: dict[str, Any],
+    preset_name: str | None,
+    weight_overrides: dict[str, float],
+) -> list[dict[str, Any]]:
+    return services.prepare_ranked_view(listings, settings, preset_name, weight_overrides)
+
+
+def clear_view_caches() -> None:
+    cached_load_app_state.clear()
+    cached_prepare_listings_view.clear()
+    cached_prepare_ranked_view.clear()
+
+
+def persisted_state_changed() -> None:
+    st.session_state["data_version"] = st.session_state.get("data_version", 0) + 1
+    clear_view_caches()
 
 
 def optional_float(value: str | float | int | None) -> float | None:
@@ -50,6 +89,7 @@ def selected_listing(scored: list[dict[str, Any]]) -> dict[str, Any] | None:
 def save_listing(conn, data: dict[str, Any]) -> None:
     db.upsert_listing(conn, data)
     st.session_state["selected_listing_id"] = data.get("id") or st.session_state.get("selected_listing_id")
+    persisted_state_changed()
     st.rerun()
 
 
@@ -97,6 +137,7 @@ def render_sidebar(conn, settings: dict[str, Any]) -> tuple[str, dict[str, float
     )
     if st.sidebar.button("Remember selected preset"):
         db.save_setting(conn, "last_selected_preset", preset_name)
+        persisted_state_changed()
         st.rerun()
 
     base_weights = get_weights(settings, preset_name)
@@ -132,6 +173,7 @@ def render_sidebar(conn, settings: dict[str, Any]) -> tuple[str, dict[str, float
             )
             if st.form_submit_button("Save finance defaults"):
                 db.save_setting(conn, "finance_defaults", finance_defaults)
+                persisted_state_changed()
                 st.rerun()
 
     with st.sidebar.expander("Property-fit targets"):
@@ -151,6 +193,7 @@ def render_sidebar(conn, settings: dict[str, Any]) -> tuple[str, dict[str, float
             targets["hard_max_body_corp"] = st.number_input("Hard max body corp", min_value=0, step=500, value=int(targets["hard_max_body_corp"]))
             if st.form_submit_button("Save property targets"):
                 db.save_setting(conn, "property_fit_targets", targets)
+                persisted_state_changed()
                 st.rerun()
 
     with st.sidebar.expander("Filter and value defaults"):
@@ -191,6 +234,7 @@ def render_sidebar(conn, settings: dict[str, Any]) -> tuple[str, dict[str, float
             )
             if st.form_submit_button("Save filter defaults"):
                 db.save_setting(conn, "filter_defaults", filter_defaults)
+                persisted_state_changed()
                 st.rerun()
 
     with st.sidebar.expander("Destination definitions"):
@@ -200,6 +244,7 @@ def render_sidebar(conn, settings: dict[str, Any]) -> tuple[str, dict[str, float
     uploaded = st.sidebar.file_uploader("CSV import", type=["csv"])
     if uploaded and st.sidebar.button("Import CSV"):
         db.import_csv(conn, uploaded.getvalue().decode("utf-8-sig"))
+        persisted_state_changed()
         st.rerun()
     st.sidebar.download_button(
         "Export CSV",
@@ -670,10 +715,11 @@ def render_verification_tab(scored: list[dict[str, Any]]) -> None:
 
 def main() -> None:
     conn = get_conn()
-    listings, settings = services.load_app_state(conn)
+    data_version = st.session_state.setdefault("data_version", 0)
+    listings, settings = cached_load_app_state(conn, data_version)
     preset_name, weight_overrides = render_sidebar(conn, settings)
-    scored = services.prepare_listings_view(listings, settings, preset_name, weight_overrides)
-    scored_ranked = services.prepare_ranked_view(listings, settings, preset_name, weight_overrides)
+    scored = cached_prepare_listings_view(listings, settings, preset_name, weight_overrides)
+    scored_ranked = cached_prepare_ranked_view(listings, settings, preset_name, weight_overrides)
 
     st.title("Brisbane Property Decision Cockpit")
     map_tab, compare_tab, verification_tab = st.tabs(["Map", "Compare", "Verification"])
