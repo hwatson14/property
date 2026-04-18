@@ -1,0 +1,62 @@
+{
+  "starter_assertions": [
+    {
+      "listing_id": "house_morningside_incomplete",
+      "must_be_rankable": false,
+      "must_have_missing_inputs": [
+        "price_comparison_value",
+        "assumed_purchase_price",
+        "manual_land_value_estimate_or_override",
+        "work_a.weekday_pm_peak",
+        "work_a.saturday_midday"
+      ]
+    },
+    {
+      "listing_id": "apt_newstead_complete",
+      "must_be_rankable": true,
+      "must_have_confidence": "Medium"
+    },
+    {
+      "listing_id": "townhouse_carina_complete",
+      "must_be_rankable": true,
+      "must_have_confidence": "High"
+    },
+    {
+      "listing_id": "apt_west_end_high_bodycorp",
+      "must_be_rankable": true,
+      "must_have_confidence": "Low"
+    },
+    {
+      "listing_id": "house_camp_hill_value",
+      "must_be_rankable": true,
+      "must_have_confidence": "High"
+    }
+  ],
+  "relative_order_expectations": {
+    "balanced": [
+      "townhouse_carina_complete",
+      "house_camp_hill_value"
+    ],
+    "location_first": [
+      "apt_newstead_complete",
+      "apt_west_end_high_bodycorp"
+    ],
+    "value_first": [
+      "house_camp_hill_value",
+      "townhouse_carina_complete"
+    ]
+  },
+  "csv_round_trip_required_fields": [
+    "price_text_raw",
+    "price_comparison_value",
+    "assumed_purchase_price",
+    "manual_commute_inputs_json",
+    "manual_land_value_estimate",
+    "manual_land_value_confidence",
+    "manual_land_value_override_score",
+    "review_status",
+    "shortlist_status",
+    "notes"
+  ],
+  "notes": "Starter fixture pack. Relative-order expectations are minimum T1A gates against the fixture-compatible starter settings; users can override those settings in the app."
+}

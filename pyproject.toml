@@ -1,0 +1,19 @@
+[project]
+name = "brisbane-property-cockpit"
+version = "0.1.0"
+description = "Private T1A Streamlit property decision cockpit"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "streamlit",
+    "pydeck",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,44 @@
+# Brisbane Property Decision Cockpit
+
+Private Streamlit decision cockpit for comparing Brisbane properties for purchase.
+
+## Purpose
+Help two users decide where to buy by combining:
+- map-first spatial review
+- ranked comparison
+- verification of missing or weak inputs
+
+## T1A scope
+- Map / Compare / Verification tabs on one page
+- manual add/edit
+- CSV import/export
+- listings + settings persistence
+- structured manual commute inputs
+- manual land-value estimate/confidence inputs
+- computed scores
+- rankability gating
+
+## T1B deployment
+Run locally with:
+
+```powershell
+streamlit run app.py
+```
+
+For Render shared deployment, use the included `render.yaml`.
+
+Exact persistent SQLite path:
+
+```text
+PROPERTY_COCKPIT_DB_PATH=/var/data/property_cockpit.sqlite3
+```
+
+See `docs/deployment_t1b.md`.
+
+## Authority
+See:
+- `AGENTS.md`
+- `docs/handoff.md`
+- `docs/formulas_and_rules.md`
+- `docs/schema_and_ui_contract.md`
+- `docs/tranches/tranche_1.md`
