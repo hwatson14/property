@@ -44,6 +44,9 @@ jobs:
           echo "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad  .pages-site/live-property.js" | sha256sum -c -
           node --check .pages-site/live-property.js
           grep -Fq '<script src="./live-property.js"></script>' .pages-site/index.html
+          cp site/favicon.svg .pages-site/favicon.svg
+          python3 -c "from pathlib import Path; p=Path('.pages-site/index.html'); s=p.read_text(encoding='utf-8'); p.write_text(s.replace('</head>', '  <link rel=\"icon\" type=\"image/svg+xml\" href=\"./favicon.svg\">\\n</head>', 1), encoding='utf-8')"
+          grep -Fq 'href="./favicon.svg"' .pages-site/index.html
           touch .pages-site/.nojekyll
 
       - name: Configure GitHub Pages
@@ -71,11 +74,12 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install Playwright
+      - name: Use preinstalled Chrome
         run: |
+          which google-chrome
+          google-chrome --version
           npm init -y
-          npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
+          npm install --no-save playwright-core@1.55.0
 
       - name: Wait for deployed site
         env:
@@ -92,6 +96,7 @@ jobs:
         env:
           PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
 
       - name: Upload deployed browser evidence
