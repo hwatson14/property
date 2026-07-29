@@ -3,8 +3,9 @@
 
   const CLIENT_VERSION = "LC-PRICE-CLIENT-v0.1.0";
   const PRICING_SCHEMA = "LC-PRICE-v0.1.0";
-  const cache = new Map();
-  let activeRequest = 0;
+  const pricingByPropertyId = new Map();
+  const requestByPropertyId = new Map();
+  const addressByPropertyId = new Map();
 
   const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, value));
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -152,9 +153,14 @@
     assessment.pricing = pricing;
     assessment.pricingClientVersion = CLIENT_VERSION;
     if (pricing.marketEstimate?.available) {
-      assessment.confidence.pricingEvidenceScore = pricing.listing?.status !== "not_found" ? 15 : 10;
-      assessment.confidence.score = Math.min(70, Number(assessment.confidence.score || 0) + assessment.confidence.pricingEvidenceScore);
-      assessment.confidence.gaps = (assessment.confidence.gaps || []).filter((gap) => gap !== "Market value and comparable sales");
+      const pricingEvidenceScore = pricing.listing?.status !== "not_found" ? 15 : 10;
+      const baseConfidence = Number.isFinite(Number(assessment.confidence?.withoutPricingScore))
+        ? Number(assessment.confidence.withoutPricingScore)
+        : Number(assessment.confidence?.score || 0);
+      assessment.confidence.withoutPricingScore = baseConfidence;
+      assessment.confidence.pricingEvidenceScore = pricingEvidenceScore;
+      assessment.confidence.score = Math.min(70, baseConfidence + pricingEvidenceScore);
+      assessment.confidence.gaps = (assessment.confidence.gaps || []).filter((gap) => gap !== "Market value and comparable sales" && gap !== "Comparable sales validation");
       if (!Array.isArray(pricing.saleHistory) || !pricing.saleHistory.length) assessment.confidence.gaps.push("Comparable sales validation");
     }
     window.LEMONCHECK_PRICING = pricing;
@@ -170,7 +176,12 @@
     window.dispatchEvent(new CustomEvent("lemoncheck:pricing-ready", { detail: { pricing, assessment } }));
   }
 
-  function markUnavailable(assessment, message) {
+  function markUnavailable(assessment, message, propertyId) {
+    const existing = pricingByPropertyId.get(String(propertyId || ""));
+    if (existing) {
+      applyPricing(existing, assessment);
+      return;
+    }
     assessment.deal = { score: null, reason: message };
     assessment.pricingClientVersion = CLIENT_VERSION;
     window.LEMONCHECK_ASSESSMENT = assessment;
@@ -179,39 +190,70 @@
     window.dispatchEvent(new CustomEvent("lemoncheck:pricing-ready", { detail: { pricing: null, assessment } }));
   }
 
+  function stableQueryAddress(data, propertyId) {
+    const key = String(propertyId);
+    const retained = addressByPropertyId.get(key);
+    if (retained) return retained;
+    let address = String(data.canonical_address || "").trim();
+    const postcode = String(data.postcode || "").trim();
+    if (postcode && !new RegExp(`\\b${postcode}\\b`).test(address)) address = `${address} ${postcode}`.trim();
+    addressByPropertyId.set(key, address);
+    return address;
+  }
+
+  function validatePricing(pricing) {
+    if (pricing.schemaVersion !== PRICING_SCHEMA) throw new Error(`Unsupported pricing schema ${pricing.schemaVersion || "missing"}`);
+    if (pricing.propertyMatch?.quality !== "exact") throw new Error("The pricing provider did not return an exact address match.");
+    if (pricing.propertyMatch?.provider === "fixture" && location.hostname !== "127.0.0.1" && location.hostname !== "localhost") throw new Error("Test fixture pricing is blocked outside local validation.");
+    return pricing;
+  }
+
   async function loadPricing(assessment) {
     configureBuyerForm();
     const data = window.PROPERTY_DATA;
     if (!data?.property_id || !data?.canonical_address || !assessment) return;
-    const requestId = ++activeRequest;
+    const propertyId = String(data.property_id);
     const base = String(window.LEMONCHECK_PRICING_API_BASE || "").replace(/\/$/, "");
-    if (!base) {
-      markUnavailable(assessment, "The automated pricing gateway is built but no live provider URL is configured yet. Manual fair value has been disabled.");
+
+    const retained = pricingByPropertyId.get(propertyId) || (data.pricing?.propertyMatch?.quality === "exact" ? data.pricing : null);
+    if (retained) {
+      pricingByPropertyId.set(propertyId, retained);
+      applyPricing(retained, assessment);
       return;
     }
+
+    if (!base) {
+      markUnavailable(assessment, "The automated pricing gateway is built but no live provider URL is configured yet. Manual fair value has been disabled.", propertyId);
+      return;
+    }
+
     renderStatus({ state: "loading", title: "Loading price evidence", text: "Resolving the provider property record, AVM, current listing and sale history." });
+    let promise = requestByPropertyId.get(propertyId);
+    if (!promise) {
+      const queryAddress = stableQueryAddress(data, propertyId);
+      promise = fetch(`${base}/v1/pricing?address=${encodeURIComponent(queryAddress)}`, { headers: { Accept: "application/json" } })
+        .then(async (response) => {
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.message || `Pricing gateway returned HTTP ${response.status}`);
+          return validatePricing(payload);
+        })
+        .then((pricing) => {
+          pricingByPropertyId.set(propertyId, pricing);
+          return pricing;
+        })
+        .finally(() => requestByPropertyId.delete(propertyId));
+      requestByPropertyId.set(propertyId, promise);
+    }
+
     try {
-      const key = `${base}|${data.canonical_address}`;
-      let promise = cache.get(key);
-      if (!promise) {
-        promise = fetch(`${base}/v1/pricing?address=${encodeURIComponent(data.canonical_address)}`, { headers: { Accept: "application/json" } })
-          .then(async (response) => {
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(payload.message || `Pricing gateway returned HTTP ${response.status}`);
-            return payload;
-          });
-        cache.set(key, promise);
-      }
       const pricing = await promise;
-      if (requestId !== activeRequest || String(window.PROPERTY_DATA?.property_id) !== String(data.property_id)) return;
-      if (pricing.schemaVersion !== PRICING_SCHEMA) throw new Error(`Unsupported pricing schema ${pricing.schemaVersion || "missing"}`);
-      if (pricing.propertyMatch?.quality !== "exact") throw new Error("The pricing provider did not return an exact address match.");
-      if (pricing.propertyMatch?.provider === "fixture" && location.hostname !== "127.0.0.1" && location.hostname !== "localhost") throw new Error("Test fixture pricing is blocked outside local validation.");
+      if (String(window.PROPERTY_DATA?.property_id) !== propertyId) return;
       applyPricing(pricing, assessment);
     } catch (error) {
-      if (requestId !== activeRequest) return;
-      cache.clear();
-      markUnavailable(assessment, error.message || "The automated pricing provider failed.");
+      const existing = pricingByPropertyId.get(propertyId);
+      if (String(window.PROPERTY_DATA?.property_id) !== propertyId) return;
+      if (existing) applyPricing(existing, assessment);
+      else markUnavailable(assessment, error.message || "The automated pricing provider failed.", propertyId);
     }
   }
 
