@@ -62,7 +62,11 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   console.log(`[report-state] ${query}: ${JSON.stringify(reportState)}`);
   if (reportState.status !== 'ready' || reportState.badge !== 'Live sources') throw new Error(`Live report failed for ${query}. State: ${JSON.stringify(reportState)}`);
 
-  await page.locator('.prototype-scores-section').waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('.lemoncheck-decision-section').waitFor({ state: 'visible', timeout: 20000 });
+  await page.waitForFunction(() => {
+    const assessment = window.LEMONCHECK_ASSESSMENT;
+    return assessment?.modelVersion === 'LC-BNE-5L-v0.2.1' && assessment?.governanceVersion === 'LC-BNE-5L-v0.2.1';
+  }, null, { timeout: 20000 });
   await page.locator('#context-property-map').waitFor({ state: 'visible', timeout: 20000 });
   await page.locator('#context-property-map .context-map-overlay path').first().waitFor({ state: 'attached', timeout: 20000 });
   await page.locator('#context-property-map .context-map-attribution').waitFor({ state: 'visible', timeout: 10000 });
@@ -86,12 +90,64 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   if (!floodMetrics.length) throw new Error('Flood metrics missing');
   if (floodMetrics.every((metric) => metric.source?.mode === 'unavailable')) throw new Error('All flood metrics were unavailable');
 
-  const enhancementState = await page.evaluate(() => ({
-    score: window.PROPERTY_DATA?.prototype_scores?.overall,
-    planning: window.PROPERTY_DATA?.prototype_scores?.planning,
-    hazard: window.PROPERTY_DATA?.prototype_scores?.hazard,
-    parcel: window.PROPERTY_DATA?.prototype_scores?.parcel,
-    breadth: window.PROPERTY_DATA?.prototype_scores?.assessmentBreadth,
+  const initialAssessment = await page.evaluate(() => window.LEMONCHECK_ASSESSMENT);
+  if (!initialAssessment || initialAssessment.modelVersion !== 'LC-BNE-5L-v0.2.1') throw new Error(`Governed five-score assessment missing: ${JSON.stringify(initialAssessment)}`);
+  if (!Number.isFinite(initialAssessment.objective?.lemonScore) || initialAssessment.objective.lemonScore < 0 || initialAssessment.objective.lemonScore > 100) throw new Error(`Invalid Lemon Score: ${JSON.stringify(initialAssessment.objective)}`);
+  if (!Number.isFinite(initialAssessment.confidence?.publicSourceScore) || initialAssessment.confidence.publicSourceScore < 0 || initialAssessment.confidence.publicSourceScore > 100) throw new Error(`Invalid public-source confidence: ${JSON.stringify(initialAssessment.confidence)}`);
+  if (!Number.isFinite(initialAssessment.confidence?.score) || initialAssessment.confidence.score < 0 || initialAssessment.confidence.score > 55) throw new Error(`Whole-assessment confidence exceeded current breadth cap: ${JSON.stringify(initialAssessment.confidence)}`);
+  if (!initialAssessment.confidence.gaps?.includes('Building and pest evidence')) throw new Error(`Whole-assessment evidence gaps missing: ${JSON.stringify(initialAssessment.confidence.gaps)}`);
+  if (initialAssessment.development?.score !== null && (!Number.isFinite(initialAssessment.development.score) || initialAssessment.development.score < 0 || initialAssessment.development.score > 100)) throw new Error(`Invalid Development Potential: ${JSON.stringify(initialAssessment.development)}`);
+  if (initialAssessment.deal?.score !== null || initialAssessment.fit?.score !== null) throw new Error('Deal and Personal Fit should wait for buyer inputs on a fresh test browser');
+  if (!Array.isArray(initialAssessment.flags) || !Array.isArray(initialAssessment.advisories)) throw new Error('Hard-flag and advisory separation missing');
+  if (initialAssessment.flags.some((flag) => flag.severity === 'advisory')) throw new Error(`Advisory leaked into hard flags: ${JSON.stringify(initialAssessment.flags)}`);
+
+  const scoreLabels = await page.locator('.lc-score-card-head > span').allTextContents();
+  for (const required of ['Lemon Score', 'Deal Score', 'Personal Fit', 'Development Potential', 'Confidence']) {
+    if (!scoreLabels.includes(required)) throw new Error(`Missing score lens ${required}: ${JSON.stringify(scoreLabels)}`);
+  }
+  if (await page.locator('.prototype-scores-section:visible').count()) throw new Error('Superseded Prototype Lemon Risk section is still visible');
+
+  const initialUiState = await page.evaluate(() => ({
+    hardCount: Number(document.querySelector('.lc-decision-grid .lc-panel:first-child .lc-panel-head > b')?.textContent || '-1'),
+    advisoryVisible: Boolean(document.querySelector('.lc-advisory-block:not([hidden])')),
+    advisoryCount: Number(document.querySelector('.lc-advisory-head > b')?.textContent || '0'),
+    modelLabel: document.querySelector('.lc-model-label')?.textContent || '',
+  }));
+  if (initialUiState.hardCount !== initialAssessment.flags.length) throw new Error(`Hard-flag UI count mismatch: ${JSON.stringify(initialUiState)}`);
+  if (initialAssessment.advisories.length && (!initialUiState.advisoryVisible || initialUiState.advisoryCount !== initialAssessment.advisories.length)) throw new Error(`Advisory UI mismatch: ${JSON.stringify(initialUiState)}`);
+  if (!/LC-BNE-5L-v0\.2\.1/.test(initialUiState.modelLabel)) throw new Error(`Governed model label missing: ${initialUiState.modelLabel}`);
+
+  const form = page.locator('.lc-profile-form');
+  await form.locator('[name="goal"]').selectOption('live_in');
+  await form.locator('[name="riskTolerance"]').selectOption('balanced');
+  await form.locator('[name="price"]').fill('900000');
+  await form.locator('[name="fairValue"]').fill('1000000');
+  await form.locator('[name="costs"]').fill('25000');
+  await form.locator('[name="simpleTitle"]').check();
+  await form.locator('button[type="submit"]').click();
+
+  await page.waitForFunction(() => {
+    const assessment = window.LEMONCHECK_ASSESSMENT;
+    return assessment?.modelVersion === 'LC-BNE-5L-v0.2.1' && Number.isFinite(assessment?.deal?.score) && Number.isFinite(assessment?.fit?.score);
+  }, null, { timeout: 10000 });
+
+  const assessment = await page.evaluate(() => window.LEMONCHECK_ASSESSMENT);
+  for (const [name, value] of Object.entries({
+    lemon: assessment.objective.lemonScore,
+    deal: assessment.deal.score,
+    fit: assessment.fit.score,
+    development: assessment.development.score,
+    confidence: assessment.confidence.score,
+    publicSourceConfidence: assessment.confidence.publicSourceScore,
+  })) {
+    if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) throw new Error(`Invalid ${name} score: ${value}`);
+  }
+  if (assessment.confidence.score > 55) throw new Error(`Whole-assessment confidence exceeded 55: ${assessment.confidence.score}`);
+  if (!assessment.decision?.title) throw new Error('Decision summary missing');
+  if (!Array.isArray(assessment.flags) || !Array.isArray(assessment.advisories)) throw new Error('Hard flags or advisories missing after buyer update');
+  if (assessment.flags.some((flag) => flag.severity === 'advisory')) throw new Error('Advisory leaked into governed hard flags after buyer update');
+
+  const mapState = await page.evaluate(() => ({
     mapExists: Boolean(document.querySelector('#context-property-map .context-map-overlay')),
     tileCount: document.querySelectorAll('#context-property-map .context-tile').length,
     parcelPathCount: document.querySelectorAll('#context-property-map .context-map-overlay path').length,
@@ -99,23 +155,32 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
     mapNote: document.querySelector('.map-source-note')?.textContent?.trim() || '',
     attribution: document.querySelector('.context-map-attribution')?.textContent?.trim() || '',
     satelliteControl: Boolean(document.querySelector('[data-basemap="satellite"]')),
-    scoreHeading: document.querySelector('.prototype-overall-score > span')?.textContent?.trim() || '',
   }));
-  if (!Number.isFinite(enhancementState.score) || enhancementState.score < 0 || enhancementState.score > 100) throw new Error(`Invalid prototype Lemon Risk score: ${JSON.stringify(enhancementState)}`);
-  for (const [name, value] of Object.entries({ planning: enhancementState.planning, hazard: enhancementState.hazard, parcel: enhancementState.parcel, breadth: enhancementState.breadth })) {
-    if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error(`Invalid ${name} score: ${value}`);
-  }
-  if (!enhancementState.mapExists || !enhancementState.oldMapHidden || enhancementState.tileCount < 4 || enhancementState.parcelPathCount < 1) throw new Error(`Contextual map did not replace the abstract SVG: ${JSON.stringify(enhancementState)}`);
-  if (!/OpenStreetMap/i.test(enhancementState.attribution)) throw new Error(`Street-map attribution missing: ${enhancementState.attribution}`);
-  if (!enhancementState.satelliteControl) throw new Error('Satellite imagery control is missing');
-  if (!/OpenStreetMap/i.test(enhancementState.mapNote) || !/Esri World Imagery/i.test(enhancementState.mapNote) || !/No listing photographs are used/i.test(enhancementState.mapNote)) throw new Error(`Map provenance note is incomplete: ${enhancementState.mapNote}`);
-  if (enhancementState.scoreHeading !== 'Prototype Lemon Risk') throw new Error('Prototype score heading is missing');
+  if (!mapState.mapExists || !mapState.oldMapHidden || mapState.tileCount < 4 || mapState.parcelPathCount < 1) throw new Error(`Contextual map did not replace the abstract SVG: ${JSON.stringify(mapState)}`);
+  if (!/OpenStreetMap/i.test(mapState.attribution)) throw new Error(`Street-map attribution missing: ${mapState.attribution}`);
+  if (!mapState.satelliteControl) throw new Error('Satellite imagery control is missing');
+  if (!/OpenStreetMap/i.test(mapState.mapNote) || !/Esri World Imagery/i.test(mapState.mapNote) || !/No listing photographs are used/i.test(mapState.mapNote)) throw new Error(`Map provenance note is incomplete: ${mapState.mapNote}`);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (overflow > 2) throw new Error(`Horizontal overflow detected: ${overflow}px`);
 
   await page.screenshot({ path: `${outDir}/${screenshotName}`, fullPage: true });
-  return { title, propertyId: String(data.property_id), metricCount: data.metrics.length, parcelCount: data.parcels.length, zoningMode: zoningMetric.source?.mode, lemonRisk: enhancementState.score, planningScore: enhancementState.planning, hazardScore: enhancementState.hazard, parcelScore: enhancementState.parcel };
+  return {
+    title,
+    propertyId: String(data.property_id),
+    metricCount: data.metrics.length,
+    parcelCount: data.parcels.length,
+    zoningMode: zoningMetric.source?.mode,
+    decision: assessment.decision.title,
+    lemonScore: assessment.objective.lemonScore,
+    dealScore: assessment.deal.score,
+    fitScore: assessment.fit.score,
+    developmentScore: assessment.development.score,
+    confidenceScore: assessment.confidence.score,
+    publicSourceConfidence: assessment.confidence.publicSourceScore,
+    hardFlags: assessment.flags.length,
+    advisories: assessment.advisories.length,
+  };
 }
 
 async function runDesktop() {
