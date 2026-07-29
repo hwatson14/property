@@ -82,6 +82,7 @@ export class DomainPricingProvider {
     const query = new URLSearchParams({ terms: address, channel: 'Residential', pageSize: '10' });
     const candidates = await this.request(`/v1/properties/_suggest?${query}`);
     const best = exactAddressMatch(address, Array.isArray(candidates) ? candidates : []);
+    if (best?.ambiguous) throw new Error(`Domain returned multiple postcode candidates for ${address}`);
     if (!best?.candidate?.id) throw new Error(`Domain could not resolve a property ID for ${address}`);
     return { ...best.candidate, exact: best.exact };
   }
