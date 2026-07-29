@@ -19,9 +19,13 @@ const FIXTURES = [
     id: 'DOMAIN-FIXTURE-WILLIAM',
     relativeScore: 100,
     addressComponents: { streetNumber: '1', streetName: 'William', streetTypeLong: 'Street', suburb: 'Brisbane City', state: 'QLD', postCode: '4000' },
-    property: { id: 'DOMAIN-FIXTURE-WILLIAM', address: '1 William Street Brisbane City QLD 4000', history: { sales: [] } },
-    estimate: null,
-    listing: null,
+    property: {
+      id: 'DOMAIN-FIXTURE-WILLIAM',
+      address: '1 William Street Brisbane City QLD 4000',
+      history: { sales: [{ date: '2021-06-01', price: 3200000, type: 'Private Treaty - Sold', documentedAsSold: true, suppressDetails: false, suppressPrice: false }] },
+    },
+    estimate: { lowerPrice: 3400000, midPrice: 3600000, upperPrice: 3900000, priceConfidence: 'low', date: '2026-07-29' },
+    listing: { id: 100002, status: 'live', listingType: 'Sale', saleMode: 'auction', dateUpdated: '2026-07-29', priceDetails: { displayPrice: 'Auction' }, addressParts: { displayAddress: '1 William Street Brisbane City QLD 4000' }, seoUrl: 'https://example.invalid/william' },
   },
 ];
 
