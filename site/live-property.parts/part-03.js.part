@@ -1,0 +1,140 @@
+    return uniq(records.map((record) => pick(record, preferredKeys))).map(String);
+  }
+
+  function formatArea(records) {
+    const parts = [];
+    for (const record of records) {
+      const area = Number(pick(record, ["statedarea", "stated_area", "STATEDAREA"]));
+      const unitRaw = String(pick(record, ["statedareaunit", "stated_area_unit", "STATEDAREAUNIT"]) || "").toLowerCase();
+      if (!Number.isFinite(area)) continue;
+      const unit = unitRaw.includes("ha") ? "ha" : unitRaw.includes("square") || unitRaw.includes("m2") || unitRaw.includes("m²") ? "m²" : unitRaw || "source units";
+      parts.push(`${new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 }).format(area)} ${unit}`);
+    }
+    return parts.length ? parts.join(" · ") : "Not returned";
+  }
+
+  function sourceForOds(dataset, result, mode = "live") {
+    return source({
+      id: `bcc-${dataset.id}`,
+      owner: "Brisbane City Council",
+      dataset: dataset.name,
+      url: dataset.url,
+      requestUrl: result?.requestUrls?.join(" | ") || null,
+      mode,
+      limitation: result?.method === "address-point fallback"
+        ? "The parcel-intersection query could not be used, so this result uses the selected address point and may miss an overlay affecting only another part of the parcel."
+        : "Mapped planning data is screening information and does not determine a site-specific approval outcome.",
+    });
+  }
+
+  function planningMetric({ id, label, result, dataset, keys, explanation, priority, zeroIsUnknown = false, role = "planning" }) {
+    const records = result?.records || [];
+    const labels = recordLabels(records, keys);
+    const failed = Boolean(result?.error);
+    const status = failed || (zeroIsUnknown && !records.length) ? "not_assessed" : records.length ? "detected" : "not_detected";
+    const displayValue = failed ? "Source unavailable" : records.length ? labels.slice(0, 3).join(" · ") || `${records.length} mapped record${records.length === 1 ? "" : "s"}` : "Not detected at property";
+    return metric({
+      id,
+      category: id.startsWith("constraint") ? "Constraints" : "Planning",
+      label,
+      value: labels,
+      displayValue,
+      status,
+      summary: failed
+        ? "The official source did not return a usable response. No clear result has been inferred."
+        : records.length
+          ? `${records.length} official mapped record${records.length === 1 ? " intersects" : "s intersect"} the resolved property geometry.`
+          : "No intersecting record was returned by this configured official dataset.",
+      explanation,
+      limitations: ["A mapped overlay is not a legal title search, planning certificate or site-specific professional assessment."],
+      source: sourceForOds(dataset, result, failed ? "unavailable" : "live"),
+      raw: { query_method: result?.method, records },
+      mapLayerIds: records.map((_, index) => `${safeId(id)}-${index}`),
+      priority,
+      role,
+    });
+  }
+
+  function floodReferenceMap(reference) {
+    const map = new Map();
+    reference.forEach((row) => {
+      const code = String(pick(row, ["metric", "metric_code", "code", "Metric"]) || "").toUpperCase();
+      if (code) map.set(code, row);
+    });
+    return map;
+  }
+
+  function floodMetric({ id, label, rows, allRows, refMap, sourceObject, explanation, priority }) {
+    const pairs = rows.map((row) => {
+      const code = String(row.metric || row.metric_code || "Metric");
+      const ref = refMap.get(code.toUpperCase()) || {};
+      const name = pick(ref, ["description", "metric_description", "name", "label", "metric_name"]);
+      return { code, value: row.value, description: name || null, lotplan: row.lotplan };
+    });
+    const display = pairs.length
+      ? pairs.slice(0, 3).map((item) => `${item.code}: ${item.value}`).join(" · ") + (pairs.length > 3 ? ` · +${pairs.length - 3} more` : "")
+      : "No matching records returned";
+    return metric({
+      id,
+      category: "Flood",
+      label,
+      value: pairs,
+      displayValue: display,
+      status: pairs.length ? "detected" : "not_detected",
+      summary: pairs.length
+        ? `${pairs.length} parcel-metric record${pairs.length === 1 ? " was" : "s were"} returned in this group.`
+        : "No parcel-metric record in this group was returned for the resolved lot-on-plan identifiers.",
+      explanation,
+      limitations: ["Flood parcel metrics are screening records. They do not prove whether a dwelling has flooded, will flood, or can obtain insurance."],
+      source: sourceObject,
+      raw: { grouped_records: pairs, total_flood_records: allRows.length },
+      priority,
+    });
+  }
+
+  function makeUnavailableFloodMetrics(error, floodSource) {
+    const defs = [
+      ["flood.levels.assigned", "Flood records returned"],
+      ["flood.fpa.overland_flow", "Overland-flow metrics"],
+      ["flood.flag.overland_flow", "River and creek metrics"],
+      ["flood.flag.large_allotment", "Storm-tide and coastal metrics"],
+      ["flood.coastal_hazard", "Ground-level and other metrics"],
+    ];
+    return defs.map(([id, label], index) => metric({
+      id,
+      category: "Flood",
+      label,
+      value: null,
+      displayValue: "Source unavailable",
+      status: "not_assessed",
+      summary: "The official flood parcel-metrics source did not return a usable response. No clear result has been inferred.",
+      explanation: "This metric is populated from Brisbane City Council parcel-level flood screening records.",
+      limitations: [error?.message || "Source request failed."],
+      source: { ...floodSource, mode: "unavailable", limitation: error?.message || floodSource.limitation },
+      raw: {},
+      priority: 20 + index,
+    }));
+  }
+
+  async function buildLiveProperty(pid) {
+    const { feature: addressFeature, requestUrl: addressRequest } = await fetchAddressByPid(pid);
+    const addressAttrs = featureAttributes(addressFeature);
+    const canonicalAddressRaw = addressAttrs.address || addressAttrs.ADDRESS;
+    const canonicalAddress = formatAddress(canonicalAddressRaw);
+    const localAuthorityRaw = addressAttrs.local_authority || "";
+    if (!/BRISBANE CITY/i.test(localAuthorityRaw)) throw new Error("This beta currently supports Brisbane City Council addresses only.");
+
+    const { features: addressFeatures, requestUrl: addressLotsRequest } = await fetchAddressLots(canonicalAddressRaw, localAuthorityRaw);
+    const addressRows = addressFeatures.length ? addressFeatures : [addressFeature];
+    const lotplans = uniq(addressRows.map((row) => featureAttributes(row).lotplan));
+    if (!lotplans.length && addressAttrs.lotplan) lotplans.push(addressAttrs.lotplan);
+
+    const parcelResult = await fetchParcels(lotplans);
+    const parcelFeatures = parcelResult.features;
+    const parcelRows = parcelFeatures.map(featureAttributes);
+    const parcelGeometries = parcelFeatures.map((feature) => arcgisGeometryToGeoJson(feature.geometry)).filter(Boolean);
+    const addressGeometry = arcgisGeometryToGeoJson(addressFeature.geometry);
+    const fallbackPoint = addressGeometry?.type === "Point"
+      ? addressGeometry.coordinates
+      : [Number(addressAttrs.longitude), Number(addressAttrs.latitude)].every(Number.isFinite)
+        ? [Number(addressAttrs.longitude), Number(addressAttrs.latitude)]
