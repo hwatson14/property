@@ -27,8 +27,11 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   const expectedPid = decodeURIComponent(String(expectedResult.route || '').split('/').pop() || '');
   if (!expectedPid) throw new Error(`Live result did not include a property route: ${JSON.stringify(expectedResult)}`);
 
-  await page.locator('#address-search:visible').fill(query);
-  await page.locator('[data-search-submit]:visible').click();
+  const searchInput = page.locator('#address-search:visible');
+  await searchInput.fill(query);
+  const visibleSubmit = page.locator('[data-search-submit]:visible');
+  if (await visibleSubmit.count()) await visibleSubmit.click();
+  else await searchInput.press('Enter');
 
   const selected = page
     .locator('.search-result-row:visible')
