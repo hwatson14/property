@@ -57,17 +57,30 @@ export function parseDisplayPrice(displayPrice) {
 
 export function exactAddressMatch(requested, candidates) {
   const target = addressIdentity(requested);
-  const scored = (candidates || []).map(candidate => {
+  const entries = (candidates || []).map(candidate => {
     const address = candidate.address || candidate.displayAddress || '';
     const identity = addressIdentity(address);
     const coreExact = Boolean(target.core) && identity.core === target.core;
-    const postcodeCompatible = target.postcode ? identity.postcode === target.postcode : true;
-    const exact = coreExact && postcodeCompatible;
-    const containment = identity.core.includes(target.core) || target.core.includes(identity.core);
-    const postcodeConflict = Boolean(target.postcode && identity.postcode && target.postcode !== identity.postcode);
+    const containment = Boolean(target.core) && (identity.core.includes(target.core) || target.core.includes(identity.core));
     const providerScore = Number(candidate.relativeScore || 0);
-    const score = postcodeConflict ? providerScore - 5_000 : exact ? 10_000 : containment ? 5_000 + providerScore : providerScore;
-    return { candidate, exact, score };
+    return { candidate, identity, coreExact, containment, providerScore };
+  });
+
+  if (!target.postcode) {
+    const coreMatches = entries.filter(entry => entry.coreExact);
+    const distinctPostcodes = new Set(coreMatches.map(entry => entry.identity.postcode).filter(Boolean));
+    if (coreMatches.length > 1 && distinctPostcodes.size > 1) {
+      const bestAmbiguous = [...coreMatches].sort((a, b) => b.providerScore - a.providerScore)[0];
+      return { candidate: bestAmbiguous.candidate, exact: false, ambiguous: true, score: bestAmbiguous.providerScore };
+    }
+  }
+
+  const scored = entries.map(entry => {
+    const postcodeCompatible = target.postcode ? entry.identity.postcode === target.postcode : true;
+    const exact = entry.coreExact && postcodeCompatible;
+    const postcodeConflict = Boolean(target.postcode && entry.identity.postcode && target.postcode !== entry.identity.postcode);
+    const score = postcodeConflict ? entry.providerScore - 5_000 : exact ? 10_000 + entry.providerScore : entry.containment ? 5_000 + entry.providerScore : entry.providerScore;
+    return { candidate: entry.candidate, exact, ambiguous: false, score };
   }).sort((a, b) => b.score - a.score);
   return scored[0] || null;
 }
