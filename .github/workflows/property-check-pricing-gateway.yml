@@ -1,0 +1,55 @@
+name: Property Check pricing gateway
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/pricing-gateway/**"
+      - ".github/workflows/property-check-pricing-gateway.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: property-check-pricing-gateway-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-and-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Validate source and provider contracts
+        working-directory: services/pricing-gateway
+        run: |
+          npm run check
+          npm test
+
+      - name: Build production container
+        run: docker build -t lemoncheck-pricing-gateway services/pricing-gateway
+
+      - name: Exercise container HTTP contract
+        run: |
+          docker run --rm -d --name lemoncheck-pricing-test \
+            -p 8787:8787 \
+            -e PRICING_PROVIDER=fixture \
+            -e ALLOWED_ORIGINS=http://127.0.0.1:8000 \
+            lemoncheck-pricing-gateway
+          trap 'docker stop lemoncheck-pricing-test >/dev/null 2>&1 || true' EXIT
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8787/health >/dev/null && break
+            sleep 1
+          done
+          curl --fail --silent --get http://127.0.0.1:8787/v1/pricing \
+            --data-urlencode "address=28 Annie Street Hamilton QLD 4007" \
+            | tee /tmp/pricing.json
+          node -e 'const p=require("/tmp/pricing.json"); if(p.schemaVersion!=="LC-PRICE-v0.1.0"||p.marketEstimate.mid!==2500000||p.sources[0].authority!=="test_only") process.exit(1)'
