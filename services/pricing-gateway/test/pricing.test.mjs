@@ -25,6 +25,22 @@ test('exact address match wins over higher-scoring partial addresses', () => {
   assert.equal(match.exact, true);
 });
 
+test('exact address accepts a provider postcode when the resolved source omitted it', () => {
+  const match = exactAddressMatch('28 Annie Street Hamilton QLD', [
+    { address: '28 Annie Street Hamilton QLD 4007', id: 'correct', relativeScore: 90 },
+    { address: '28 Annie Street Hamilton QLD 4011', id: 'alternative-postcode', relativeScore: 95 },
+  ]);
+  assert.equal(match.candidate.id, 'alternative-postcode', 'without a requested postcode, address core is exact and provider score breaks a duplicate tie');
+  assert.equal(match.exact, true);
+
+  const constrained = exactAddressMatch('28 Annie Street Hamilton QLD 4007', [
+    { address: '28 Annie Street Hamilton QLD 4011', id: 'wrong-postcode', relativeScore: 100 },
+    { address: '28 Annie Street Hamilton QLD 4007', id: 'correct-postcode', relativeScore: 80 },
+  ]);
+  assert.equal(constrained.candidate.id, 'correct-postcode');
+  assert.equal(constrained.exact, true);
+});
+
 test('Domain provider resolves exact property, AVM, listing and sale history', async () => {
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
@@ -110,6 +126,12 @@ test('HTTP gateway serves automated fixture contract and rejects unknown address
 
   const payloadTwo = await fetch(`http://127.0.0.1:${port}/v1/pricing?address=${encodeURIComponent('28 Annie Street Hamilton QLD 4007')}`).then(r => r.json());
   assert.equal(payloadTwo.cache.status, 'hit');
+
+  const withoutPostcode = await fetch(`http://127.0.0.1:${port}/v1/pricing?address=${encodeURIComponent('28 Annie Street Hamilton QLD')}`);
+  assert.equal(withoutPostcode.status, 200);
+  const withoutPostcodePayload = await withoutPostcode.json();
+  assert.equal(withoutPostcodePayload.propertyMatch.quality, 'exact');
+  assert.equal(withoutPostcodePayload.marketEstimate.mid, 2_500_000);
 
   const missing = await fetch(`http://127.0.0.1:${port}/v1/pricing?address=${encodeURIComponent('99 Missing Street Brisbane QLD 4000')}`);
   assert.equal(missing.status, 404);
