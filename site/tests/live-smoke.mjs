@@ -37,9 +37,24 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   if (!expectedPattern.test(rowText)) throw new Error(`Unexpected address result for ${query}: ${rowText}`);
 
   await selected.click();
-  await page.waitForFunction(() => window.PROPERTY_DATA?.mode === 'live', null, { timeout: 60000 });
-  await page.locator('.mode-badge').waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(() => {
+    const badge = document.querySelector('.mode-badge')?.textContent?.trim() || '';
+    return window.PROPERTY_DATA?.mode === 'live' || badge === 'Source unavailable';
+  }, null, { timeout: 75000 });
 
+  const reportState = await page.evaluate(() => ({
+    hash: window.location.hash,
+    badge: document.querySelector('.mode-badge')?.textContent?.trim() || null,
+    title: document.querySelector('.report-title-block h1')?.textContent?.trim() || null,
+    notice: document.querySelector('[data-spa-page="report"] .demo-notice p')?.textContent?.trim() || null,
+    dataMode: window.PROPERTY_DATA?.mode || null,
+  }));
+  console.log(`[report-state] ${query}: ${JSON.stringify(reportState)}`);
+  if (reportState.dataMode !== 'live') {
+    throw new Error(`Live report failed for ${query}. State: ${JSON.stringify(reportState)}`);
+  }
+
+  await page.locator('.mode-badge').waitFor({ state: 'visible', timeout: 10000 });
   const title = await page.locator('.report-title-block h1').innerText();
   if (!expectedPattern.test(title)) throw new Error(`Report title did not match ${expectedPattern}: ${title}`);
   if ((await page.locator('.mode-badge').innerText()).trim() !== 'Live sources') throw new Error('Report did not enter live source mode');
