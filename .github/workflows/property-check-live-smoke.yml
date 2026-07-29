@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: property-check-live-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   live-browser-smoke:
     runs-on: ubuntu-latest
@@ -24,11 +28,12 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install Playwright
+      - name: Use preinstalled Chrome
         run: |
+          which google-chrome
+          google-chrome --version
           npm init -y
-          npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
+          npm install --no-save playwright-core@1.55.0
 
       - name: Build and verify live static site
         run: |
@@ -61,6 +66,7 @@ jobs:
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
+          CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
 
       - name: Upload browser evidence
