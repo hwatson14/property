@@ -83,6 +83,10 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
     throw new Error(`Live report failed for ${query}. State: ${JSON.stringify(reportState)}`);
   }
 
+  await page.locator('.prototype-scores-section').waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('#leaflet-property-map .leaflet-map-pane').waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('#leaflet-property-map .leaflet-control-attribution').waitFor({ state: 'visible', timeout: 10000 });
+
   const title = reportState.title;
   if (!expectedPattern.test(title)) throw new Error(`Report title did not match ${expectedPattern}: ${title}`);
 
@@ -105,6 +109,27 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   if (!floodMetrics.length) throw new Error('Flood metrics missing');
   if (floodMetrics.every((metric) => metric.source?.mode === 'unavailable')) throw new Error('All flood metrics were unavailable');
 
+  const enhancementState = await page.evaluate(() => ({
+    score: window.PROPERTY_DATA?.prototype_scores?.overall,
+    planning: window.PROPERTY_DATA?.prototype_scores?.planning,
+    hazard: window.PROPERTY_DATA?.prototype_scores?.hazard,
+    parcel: window.PROPERTY_DATA?.prototype_scores?.parcel,
+    breadth: window.PROPERTY_DATA?.prototype_scores?.assessmentBreadth,
+    mapExists: Boolean(document.querySelector('#leaflet-property-map .leaflet-map-pane')),
+    oldMapHidden: getComputedStyle(document.getElementById('property-map')).display === 'none',
+    mapNote: document.querySelector('.map-source-note')?.textContent?.trim() || '',
+    scoreHeading: document.querySelector('.prototype-overall-score > span')?.textContent?.trim() || '',
+  }));
+  if (!Number.isFinite(enhancementState.score) || enhancementState.score < 0 || enhancementState.score > 100) {
+    throw new Error(`Invalid prototype Lemon Risk score: ${JSON.stringify(enhancementState)}`);
+  }
+  for (const [name, value] of Object.entries({ planning: enhancementState.planning, hazard: enhancementState.hazard, parcel: enhancementState.parcel, breadth: enhancementState.breadth })) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error(`Invalid ${name} score: ${value}`);
+  }
+  if (!enhancementState.mapExists || !enhancementState.oldMapHidden) throw new Error(`Contextual map did not replace the abstract SVG: ${JSON.stringify(enhancementState)}`);
+  if (!/No listing photographs are used/i.test(enhancementState.mapNote)) throw new Error('Map provenance note is missing');
+  if (enhancementState.scoreHeading !== 'Prototype Lemon Risk') throw new Error('Prototype score heading is missing');
+
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (overflow > 2) throw new Error(`Horizontal overflow detected: ${overflow}px`);
 
@@ -115,6 +140,10 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
     metricCount: data.metrics.length,
     parcelCount: data.parcels.length,
     zoningMode: zoningMetric.source?.mode,
+    lemonRisk: enhancementState.score,
+    planningScore: enhancementState.planning,
+    hazardScore: enhancementState.hazard,
+    parcelScore: enhancementState.parcel,
   };
 }
 
