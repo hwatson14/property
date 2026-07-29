@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/property-check-public-site-verify.yml"
       - "site/tests/live-smoke.mjs"
+      - "site/tests/comparison-smoke.mjs"
   workflow_dispatch:
 
 permissions:
@@ -35,18 +36,18 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for governed five-score build to be served
+      - name: Wait for saved-comparison build to be served
         run: |
           for i in {1..120}; do
             if curl --fail --silent --location --max-time 15 \
-              https://hwatson14.github.io/property/decision-governance.js \
-              | grep -Fq 'LC-BNE-5L-v0.2.1'; then
-              echo "Governed five-score bundle is deployed."
+              https://hwatson14.github.io/property/shortlist.js \
+              | grep -Fq 'LC-COMPARE-v0.1.0'; then
+              echo "Saved-comparison bundle is deployed."
               exit 0
             fi
             sleep 2
           done
-          echo "The governed five-score bundle did not become available."
+          echo "The saved-comparison bundle did not become available."
           exit 1
 
       - name: Verify public site and official data sources
@@ -55,6 +56,13 @@ jobs:
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
+
+      - name: Verify public saved-property comparison
+        env:
+          PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/comparison-smoke.mjs
 
       - name: Upload public-site browser evidence
         if: always()
