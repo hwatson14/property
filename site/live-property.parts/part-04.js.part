@@ -1,0 +1,140 @@
+        : geometryPoint(parcelGeometries[0]);
+
+    const planningPromises = Object.fromEntries(Object.entries(datasets).map(([key, dataset]) => [key, odsQuery(dataset, parcelGeometries, fallbackPoint).catch((error) => ({ records: [], requestUrls: [], method: "failed", error }))]));
+    const [planningEntries, floodSettled, easementSettled] = await Promise.all([
+      Promise.all(Object.entries(planningPromises).map(async ([key, promise]) => [key, await promise])),
+      fetchFlood(lotplans).then((value) => ({ value })).catch((error) => ({ error })),
+      fetchEasements(parcelFeatures, fallbackPoint).then((value) => ({ value })).catch((error) => ({ error })),
+    ]);
+    const planning = Object.fromEntries(planningEntries);
+
+    const addressSource = source({
+      id: "qld-qscf-address",
+      owner: "Queensland Government",
+      dataset: "QSCF Land Parcel Property Framework — Addresses",
+      url: `${QSCF}/0`,
+      requestUrl: `${addressRequest} | ${addressLotsRequest}`,
+      limitation: "An address point links the address to a parcel descriptor but does not prove ownership or legal title.",
+    });
+    const parcelSource = source({
+      id: "qld-qscf-lot",
+      owner: "Queensland Government",
+      dataset: "QSCF Land Parcel Property Framework — Lot parcels",
+      url: `${QSCF}/120`,
+      requestUrl: parcelResult.requestUrl,
+      limitation: "The cadastral geometry is a graphical representation and is not the legal survey boundary.",
+    });
+
+    const mapLayers = [];
+    parcelFeatures.forEach((feature, index) => {
+      const attrs = featureAttributes(feature);
+      const geometry = arcgisGeometryToGeoJson(feature.geometry);
+      if (!geometry) return;
+      mapLayers.push({
+        layer_id: `parcel-${index}`,
+        label: attrs.lotplan || lotplans[index] || `Parcel ${index + 1}`,
+        category: "Property",
+        style_role: "parcel",
+        geometry,
+        approximate: false,
+        visible_by_default: true,
+        source_metric_ids: ["property.parcels", "property.parcel_area"],
+      });
+    });
+
+    const overlayConfig = [
+      ["zoning", "planning.zone", "planning"],
+      ["character", "planning.character", "planning"],
+      ["stateHeritage", "planning.heritage.state", "heritage"],
+      ["localHeritage", "planning.heritage.reference", "heritage"],
+      ["pre1911", "planning.heritage.entry_date", "heritage"],
+      ["bushfire", "constraint.bushfire", "constraint"],
+      ["waterway", "constraint.waterway_corridor", "constraint"],
+    ];
+    overlayConfig.forEach(([key, metricId, role]) => {
+      (planning[key]?.records || []).forEach((record, index) => {
+        const geometry = odsGeometry(record.geo_shape);
+        if (!geometry) return;
+        mapLayers.push({
+          layer_id: `${safeId(metricId)}-${index}`,
+          label: pick(record, ["zone_prec_desc", "lvl2_zone", "ovl2_desc", "description", "name"]) || datasets[key].name,
+          category: metricId.startsWith("constraint") ? "Constraints" : "Planning",
+          style_role: role,
+          geometry,
+          approximate: false,
+          visible_by_default: true,
+          source_metric_ids: [metricId],
+        });
+      });
+    });
+
+    const metrics = [
+      metric({
+        id: "property.address", category: "Property", label: "Canonical address", value: canonicalAddress,
+        displayValue: canonicalAddress, status: "informational",
+        summary: "The selected address was resolved through the Queensland address source.",
+        explanation: "Address identity is the first link in the source chain before parcel and council-specific data is loaded.",
+        limitations: ["Address identity does not prove ownership or legal title."], source: addressSource,
+        raw: addressAttrs, mapLayerIds: mapLayers.filter((layer) => layer.style_role === "parcel").map((layer) => layer.layer_id), priority: 1,
+      }),
+      metric({
+        id: "property.parcel_count", category: "Property", label: "Parcel count", value: lotplans.length,
+        displayValue: `${lotplans.length} parcel${lotplans.length === 1 ? "" : "s"}`, status: lotplans.length > 1 ? "multiple" : "informational",
+        summary: lotplans.length > 1 ? "Multiple lot-on-plan identifiers were returned for the selected address." : "One lot-on-plan identifier was returned for the selected address.",
+        explanation: "All returned lot-on-plan identifiers are carried through the parcel, flood and planning source chain.",
+        limitations: ["Some complex properties may require title or survey records to confirm the full legal holding."], source: addressSource,
+        raw: { lotplans }, mapLayerIds: mapLayers.filter((layer) => layer.style_role === "parcel").map((layer) => layer.layer_id), priority: 2,
+      }),
+      metric({
+        id: "property.parcels", category: "Property", label: "Lot on plan", value: lotplans,
+        displayValue: lotplans.join(" · ") || "Not returned", status: lotplans.length > 1 ? "multiple" : lotplans.length ? "informational" : "not_assessed",
+        summary: "Lot-on-plan is the stable join key used to retrieve parcel and flood records.",
+        explanation: "The selected address may resolve to one or more cadastral lot identifiers.",
+        limitations: ["Cadastral mapping is graphical and is not the legal survey boundary."], source: addressSource,
+        raw: { address_records: addressRows.map(featureAttributes) }, mapLayerIds: mapLayers.filter((layer) => layer.style_role === "parcel").map((layer) => layer.layer_id), priority: 3,
+      }),
+      metric({
+        id: "property.local_authority", category: "Property", label: "Local government", value: localAuthorityRaw,
+        displayValue: localAuthorityRaw.replace(/\bCITY\b/i, "City"), status: "informational",
+        summary: "The Brisbane City Council source adapters were selected for this address.",
+        explanation: "Local-government identity determines which council-specific planning and flood sources apply.",
+        limitations: ["The council name does not itself describe the planning controls affecting the property."], source: addressSource,
+        raw: { local_authority: localAuthorityRaw }, priority: 4,
+      }),
+      metric({
+        id: "property.parcel_area", category: "Property", label: "Official parcel area", value: parcelRows.map((row) => pick(row, ["statedarea", "stated_area"])),
+        displayValue: parcelRows.length ? formatArea(parcelRows) : "Parcel source unavailable", status: parcelRows.length ? "informational" : "not_assessed",
+        summary: parcelRows.length ? "Stated area fields were returned from the Queensland lot-parcel source." : "No lot-parcel record was returned, so no official area has been inferred.",
+        explanation: "The site displays the stated area and source units returned for each resolved lot.",
+        limitations: ["Displayed cadastral area does not replace title or survey documentation."], source: parcelRows.length ? parcelSource : { ...parcelSource, mode: "unavailable" },
+        raw: { parcels: parcelRows }, mapLayerIds: mapLayers.filter((layer) => layer.style_role === "parcel").map((layer) => layer.layer_id), priority: 5,
+      }),
+      planningMetric({ id: "planning.zone", label: "City Plan zone", result: planning.zoning, dataset: datasets.zoning, keys: ["zone_prec_desc", "lvl2_zone", "lvl1_zone", "zone_code"], explanation: "The zoning dataset is intersected with the resolved parcel geometry.", priority: 1, zeroIsUnknown: true }),
+      planningMetric({ id: "planning.heritage.state", label: "State heritage overlay", result: planning.stateHeritage, dataset: datasets.stateHeritage, keys: ["name", "description", "ovl2_desc", "heritage_name", "place_name"], explanation: "This identifies mapped State heritage overlay records intersecting the property.", priority: 2, role: "heritage" }),
+      planningMetric({ id: "planning.heritage.reference", label: "Local heritage overlay", result: planning.localHeritage, dataset: datasets.localHeritage, keys: ["name", "description", "ovl2_desc", "heritage_name", "place_name"], explanation: "This identifies mapped Local heritage overlay records intersecting the property.", priority: 3, role: "heritage" }),
+      planningMetric({ id: "planning.heritage.entry_date", label: "Pre-1911 building overlay", result: planning.pre1911, dataset: datasets.pre1911, keys: ["ovl2_desc", "description", "ovl2_cat"], explanation: "This identifies mapped Pre-1911 building-site records intersecting the property.", priority: 4, role: "heritage" }),
+      planningMetric({ id: "planning.character", label: "Dwelling-house character overlay", result: planning.character, dataset: datasets.character, keys: ["ovl2_desc", "description", "ovl2_cat"], explanation: "This identifies mapped dwelling-house character records intersecting the property.", priority: 5 }),
+    ];
+
+    const floodSource = source({
+      id: "bcc-flood-parcel-metrics",
+      owner: "Brisbane City Council",
+      dataset: "Flood Awareness — Property Parcel Metrics",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/flood-awareness-property-parcel-metrics/",
+      requestUrl: floodSettled.value?.requestUrl || null,
+      mode: floodSettled.error ? "unavailable" : "live",
+      limitation: "Council describes these as parcel-level screening metrics. They are not intended to replace a current FloodWise report or professional assessment.",
+    });
+
+    if (floodSettled.error) {
+      metrics.push(...makeUnavailableFloodMetrics(floodSettled.error, floodSource));
+    } else {
+      const allRows = floodSettled.value.records;
+      const refMap = floodReferenceMap(floodSettled.value.reference);
+      const code = (row) => String(row.metric || row.metric_code || "").toUpperCase();
+      const overland = allRows.filter((row) => /OLF|OVERLAND/.test(code(row)));
+      const riverCreek = allRows.filter((row) => /RIVER|CREEK/.test(code(row)));
+      const coastal = allRows.filter((row) => /TIDE|COAST|STORM/.test(code(row)));
+      const ground = allRows.filter((row) => /GROUND|_RL|RL_/.test(code(row)));
+      const grouped = new Set([...overland, ...riverCreek, ...coastal, ...ground]);
+      const other = allRows.filter((row) => !grouped.has(row));
