@@ -1,0 +1,50 @@
+name: Property Check pricing source probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "site/tests/pricing-source-probe.mjs"
+      - ".github/workflows/property-check-pricing-source-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: property-check-pricing-source-probe-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Use preinstalled Chrome
+        run: |
+          which google-chrome
+          google-chrome --version
+          npm init -y
+          npm install --no-save playwright-core@1.55.0
+
+      - name: Probe no-key automated pricing sources
+        env:
+          PRICING_PROBE_ARTIFACT_DIR: site/tests/pricing-probe-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/pricing-source-probe.mjs
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: property-check-pricing-source-probe
+          path: site/tests/pricing-probe-artifacts
+          if-no-files-found: ignore
