@@ -1,0 +1,140 @@
+    return { feature, requestUrl: url };
+  }
+
+  async function fetchAddressLots(address, localAuthority) {
+    const where = `address = '${escSql(address)}' AND local_authority = '${escSql(localAuthority)}'`;
+    const url = arcgisQueryUrl(0, {
+      where,
+      outFields: "*",
+      returnGeometry: "true",
+      resultRecordCount: "50",
+    });
+    const payload = await fetchJson(url, { cache: false });
+    return { features: payload.features || [], requestUrl: url };
+  }
+
+  async function fetchParcels(lotplans) {
+    if (!lotplans.length) return { features: [], requestUrl: null };
+    const where = lotplans.map((lotplan) => `lotplan = '${escSql(lotplan)}'`).join(" OR ");
+    const url = arcgisQueryUrl(120, {
+      where,
+      outFields: "*",
+      returnGeometry: "true",
+      resultRecordCount: "100",
+    });
+    const payload = await fetchJson(url, { cache: false });
+    return { features: payload.features || [], requestUrl: url };
+  }
+
+  function geometryLiteral(geometry) {
+    return `geom'${JSON.stringify(geometry).replaceAll("'", "''")}'`;
+  }
+
+  async function odsQuery(dataset, parcelGeometries, fallbackPoint) {
+    const base = `${BCC}/${dataset.id}/records`;
+    const records = [];
+    const requests = [];
+    let method = "parcel intersection";
+    let error = null;
+
+    for (const geometry of parcelGeometries) {
+      try {
+        const url = new URL(base);
+        url.searchParams.set("where", `intersects(geo_shape, ${geometryLiteral(geometry)})`);
+        url.searchParams.set("limit", "50");
+        requests.push(url.toString());
+        const payload = await fetchJson(url.toString(), { cache: false, timeout: 16000 });
+        records.push(...(payload.results || []));
+      } catch (err) {
+        error = err;
+        break;
+      }
+    }
+
+    if ((!parcelGeometries.length || error) && fallbackPoint) {
+      records.length = 0;
+      requests.length = 0;
+      method = "address-point fallback";
+      const [lon, lat] = fallbackPoint;
+      const url = new URL(base);
+      url.searchParams.set("where", `within_distance(geo_shape, geom'POINT(${lon} ${lat})', 1 m)`);
+      url.searchParams.set("limit", "50");
+      requests.push(url.toString());
+      const payload = await fetchJson(url.toString(), { cache: false, timeout: 16000 });
+      records.push(...(payload.results || []));
+      error = null;
+    }
+
+    const dedup = new Map();
+    records.forEach((record) => dedup.set(String(record.objectid || record.recordid || JSON.stringify(record)), record));
+    return { records: [...dedup.values()], requestUrls: requests, method, error };
+  }
+
+  async function fetchFlood(lotplans) {
+    const datasetId = "flood-awareness-property-parcel-metrics";
+    const referenceId = "flood-awareness-property-parcel-metrics-reference";
+    const url = new URL(`${BCC}/${datasetId}/records`);
+    url.searchParams.set("where", lotplans.map((lotplan) => `lotplan = \"${escOds(lotplan)}\"`).join(" OR "));
+    url.searchParams.set("limit", "100");
+    const refUrl = new URL(`${BCC}/${referenceId}/records`);
+    refUrl.searchParams.set("limit", "100");
+    const [payload, reference] = await Promise.all([
+      fetchJson(url.toString(), { cache: false, timeout: 16000 }),
+      fetchJson(refUrl.toString(), { cacheKey: "flood-reference", timeout: 16000 }),
+    ]);
+    return { records: payload.results || [], reference: reference.results || [], requestUrl: url.toString(), referenceUrl: refUrl.toString() };
+  }
+
+  async function fetchEasements(parcelFeatures, fallbackPoint) {
+    const all = [];
+    const requests = [];
+    for (const feature of parcelFeatures) {
+      const geometry = feature.geometry;
+      if (!geometry?.rings) continue;
+      const url = arcgisQueryUrl(130, {
+        where: "1=1",
+        outFields: "*",
+        returnGeometry: "true",
+        geometry: JSON.stringify(geometry),
+        geometryType: "esriGeometryPolygon",
+        inSR: "4326",
+        spatialRel: "esriSpatialRelIntersects",
+        resultRecordCount: "100",
+      });
+      requests.push(url);
+      const payload = await fetchJson(url, { cache: false, timeout: 16000 });
+      all.push(...(payload.features || []));
+    }
+    if (!parcelFeatures.length && fallbackPoint) {
+      const [lon, lat] = fallbackPoint;
+      const url = arcgisQueryUrl(130, {
+        where: "1=1",
+        outFields: "*",
+        returnGeometry: "true",
+        geometry: `${lon},${lat}`,
+        geometryType: "esriGeometryPoint",
+        inSR: "4326",
+        spatialRel: "esriSpatialRelIntersects",
+        resultRecordCount: "100",
+      });
+      requests.push(url);
+      const payload = await fetchJson(url, { cache: false, timeout: 16000 });
+      all.push(...(payload.features || []));
+    }
+    const dedup = new Map();
+    all.forEach((feature) => {
+      const attrs = featureAttributes(feature);
+      dedup.set(String(attrs.objectid || attrs.OBJECTID || attrs.lotplan || JSON.stringify(attrs)), feature);
+    });
+    return { features: [...dedup.values()], requestUrls: requests };
+  }
+
+  function pick(record, keys) {
+    for (const key of keys) {
+      const value = record?.[key];
+      if (value !== null && value !== undefined && String(value).trim() !== "") return value;
+    }
+    return null;
+  }
+
+  function recordLabels(records, preferredKeys) {
