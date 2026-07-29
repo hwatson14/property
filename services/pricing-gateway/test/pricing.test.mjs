@@ -25,13 +25,20 @@ test('exact address match wins over higher-scoring partial addresses', () => {
   assert.equal(match.exact, true);
 });
 
-test('exact address accepts a provider postcode when the resolved source omitted it', () => {
-  const match = exactAddressMatch('28 Annie Street Hamilton QLD', [
-    { address: '28 Annie Street Hamilton QLD 4007', id: 'correct', relativeScore: 90 },
-    { address: '28 Annie Street Hamilton QLD 4011', id: 'alternative-postcode', relativeScore: 95 },
+test('postcode completion is exact only when the omitted postcode resolves uniquely', () => {
+  const unique = exactAddressMatch('28 Annie Street Hamilton QLD', [
+    { address: '28 Annie Street Hamilton QLD 4007', id: 'unique', relativeScore: 90 },
   ]);
-  assert.equal(match.candidate.id, 'alternative-postcode', 'without a requested postcode, address core is exact and provider score breaks a duplicate tie');
-  assert.equal(match.exact, true);
+  assert.equal(unique.candidate.id, 'unique');
+  assert.equal(unique.exact, true);
+  assert.equal(unique.ambiguous, false);
+
+  const ambiguous = exactAddressMatch('28 Annie Street Hamilton QLD', [
+    { address: '28 Annie Street Hamilton QLD 4007', id: 'first-postcode', relativeScore: 90 },
+    { address: '28 Annie Street Hamilton QLD 4011', id: 'second-postcode', relativeScore: 95 },
+  ]);
+  assert.equal(ambiguous.exact, false);
+  assert.equal(ambiguous.ambiguous, true);
 
   const constrained = exactAddressMatch('28 Annie Street Hamilton QLD 4007', [
     { address: '28 Annie Street Hamilton QLD 4011', id: 'wrong-postcode', relativeScore: 100 },
@@ -39,6 +46,7 @@ test('exact address accepts a provider postcode when the resolved source omitted
   ]);
   assert.equal(constrained.candidate.id, 'correct-postcode');
   assert.equal(constrained.exact, true);
+  assert.equal(constrained.ambiguous, false);
 });
 
 test('Domain provider resolves exact property, AVM, listing and sale history', async () => {
@@ -77,6 +85,19 @@ test('Domain provider resolves exact property, AVM, listing and sale history', a
   assert.equal(result.saleHistory[0].price, 1_250_000);
   assert.ok(calls.some(call => call.authorization === 'Bearer test-token'));
   assert.equal(calls.filter(call => call.url.includes('/connect/token')).length, 1, 'access token should be reused');
+});
+
+test('Domain provider rejects postcode ambiguity', async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes('/connect/token')) return response(200, { access_token: 'test-token', expires_in: 3600 });
+    if (String(url).includes('/properties/_suggest')) return response(200, [
+      { address: '28 Annie Street Hamilton QLD 4007', id: 'one', relativeScore: 90 },
+      { address: '28 Annie Street Hamilton QLD 4011', id: 'two', relativeScore: 95 },
+    ]);
+    throw new Error(`Unexpected request ${url}`);
+  };
+  const provider = new DomainPricingProvider({ clientId: 'client', clientSecret: 'secret', fetchImpl, apiBase: 'https://api.test', authUrl: 'https://auth.test/connect/token' });
+  await assert.rejects(() => provider.pricing('28 Annie Street Hamilton QLD'), /multiple postcode candidates/i);
 });
 
 test('Domain provider returns partial response when listing and estimate are unavailable', async () => {
