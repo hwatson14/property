@@ -1,0 +1,140 @@
+      resultRecordCount: "12",
+      orderByFields: "address",
+    });
+    const payload = await fetchJson(url, { cache: false, timeout: 15000 });
+    const features = Array.isArray(payload.features) ? payload.features : [];
+    const grouped = new Map();
+    for (const feature of features) {
+      const attrs = featureAttributes(feature);
+      const pid = attrs.address_pid || attrs.ADDRESS_PID;
+      const address = attrs.address || attrs.ADDRESS;
+      if (!pid || !address) continue;
+      const key = String(pid);
+      const row = grouped.get(key) || {
+        address: formatAddress(address),
+        address_pid: pid,
+        lotplans: [],
+        source_mode: "live",
+        route: `#/report/${encodeURIComponent(pid)}`,
+      };
+      if (attrs.lotplan) row.lotplans.push(attrs.lotplan);
+      grouped.set(key, row);
+    }
+    return [...grouped.values()].map((row) => ({
+      address: row.address,
+      lotplan: uniq(row.lotplans).join(" · ") || "Lot/plan resolves after selection",
+      note: "Queensland address source",
+      source_mode: "live",
+      route: row.route,
+    }));
+  }
+
+  window.fetch = async (input, init) => {
+    const rawUrl = typeof input === "string" ? input : input?.url || "";
+    const baseOrigin = /^https?:/i.test(window.location.origin) ? window.location.origin : "https://property-check.local";
+    const url = new URL(rawUrl, baseOrigin);
+    if (url.pathname === "/api/address-search" || url.pathname.endsWith("/api/address-search")) {
+      const query = (url.searchParams.get("q") || "").trim();
+      try {
+        const results = await searchAddresses(query);
+        if (normaliseSearchText(query).includes("ANNIE") && !results.some((item) => item.source_mode === "fixture")) {
+          results.push(DEMO);
+        }
+        return new Response(JSON.stringify({ results, live_error: false, static_demo: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        const results = normaliseSearchText(query).includes("ANNIE") || normaliseSearchText(query).includes("DEMO") ? [DEMO] : [];
+        return new Response(JSON.stringify({ results, live_error: true, static_demo: false, error: error.message }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+    return nativeFetch(input, init);
+  };
+
+  function source({ id, owner, dataset, url, requestUrl, mode = "live", retrievedAt = nowIso(), limitation = "" }) {
+    return {
+      source_id: id,
+      owner,
+      dataset,
+      authoritative_url: url,
+      request_url: requestUrl || null,
+      api_url: requestUrl || null,
+      mode,
+      authority: "official",
+      retrieved_at: retrievedAt,
+      dataset_updated_at: null,
+      licence: owner === "Brisbane City Council" ? "CC BY 4.0" : "CC BY 4.0; see service metadata",
+      limitation,
+      record_id: null,
+    };
+  }
+
+  function metric({ id, category, label, value, displayValue, status = "informational", summary, explanation, limitations = [], source: metricSource, raw = {}, mapLayerIds = [], priority = 10 }) {
+    return {
+      metric_id: id,
+      category,
+      label,
+      value,
+      display_value: displayValue ?? (value === null || value === undefined ? "Not available" : String(value)),
+      status,
+      summary,
+      explanation,
+      limitations,
+      source: metricSource,
+      raw,
+      map_layer_ids: mapLayerIds,
+      priority,
+    };
+  }
+
+  function arcgisGeometryToGeoJson(geometry) {
+    if (!geometry) return null;
+    if (Number.isFinite(geometry.x) && Number.isFinite(geometry.y)) {
+      return { type: "Point", coordinates: [geometry.x, geometry.y] };
+    }
+    if (Array.isArray(geometry.rings)) {
+      return { type: "Polygon", coordinates: geometry.rings };
+    }
+    if (Array.isArray(geometry.paths)) {
+      return geometry.paths.length === 1
+        ? { type: "LineString", coordinates: geometry.paths[0] }
+        : { type: "MultiLineString", coordinates: geometry.paths };
+    }
+    return geometry.type && geometry.coordinates ? geometry : null;
+  }
+
+  function odsGeometry(value) {
+    if (!value) return null;
+    if (value.type === "Feature") return value.geometry || null;
+    if (value.geometry && value.type !== "GeometryCollection") return value.geometry;
+    return value.type && value.coordinates ? value : null;
+  }
+
+  function geometryPoint(geometry) {
+    const points = [];
+    const walk = (value) => {
+      if (!Array.isArray(value)) return;
+      if (value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1])) points.push([value[0], value[1]]);
+      else value.forEach(walk);
+    };
+    walk(geometry?.coordinates);
+    if (!points.length) return null;
+    const lon = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+    const lat = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+    return [lon, lat];
+  }
+
+  async function fetchAddressByPid(pid) {
+    const url = arcgisQueryUrl(0, {
+      where: `address_pid = '${escSql(pid)}'`,
+      outFields: "*",
+      returnGeometry: "true",
+      resultRecordCount: "5",
+    });
+    const payload = await fetchJson(url, { cache: false });
+    const feature = payload.features?.[0];
+    if (!feature) throw new Error("The selected Queensland address could not be resolved.");

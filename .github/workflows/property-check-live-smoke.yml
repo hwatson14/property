@@ -1,33 +1,39 @@
-name: Deploy Property Check live beta
+name: Property Check live source smoke
 
 on:
-  push:
+  pull_request:
     branches: [main]
     paths:
       - "site/**"
-      - ".github/workflows/property-check-pages.yml"
+      - ".github/workflows/property-check-live-smoke.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: property-check-pages
+  group: property-check-live-smoke-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  live-browser-smoke:
     runs-on: ubuntu-latest
-    outputs:
-      page_url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Use preinstalled Chrome
+        run: |
+          which google-chrome
+          google-chrome --version
+          npm init -y
+          npm install --no-save playwright-core@1.55.0
 
       - name: Build and verify live static site
         run: |
@@ -47,62 +53,29 @@ jobs:
           cp site/favicon.svg .pages-site/favicon.svg
           python3 -c "from pathlib import Path; p=Path('.pages-site/index.html'); s=p.read_text(encoding='utf-8'); p.write_text(s.replace('</head>', '  <link rel=\"icon\" type=\"image/svg+xml\" href=\"./favicon.svg\">\\n</head>', 1), encoding='utf-8')"
           grep -Fq 'href="./favicon.svg"' .pages-site/index.html
-          touch .pages-site/.nojekyll
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload static site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: .pages-site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  verify-live-site:
-    needs: deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: Use preinstalled Chrome
+      - name: Start static site
         run: |
-          which google-chrome
-          google-chrome --version
-          npm init -y
-          npm install --no-save playwright-core@1.55.0
-
-      - name: Wait for deployed site
-        env:
-          SITE_URL: ${{ needs.deploy.outputs.page_url }}
-        run: |
-          for i in {1..60}; do
-            curl --fail --silent --location "$SITE_URL" >/dev/null && exit 0
-            sleep 2
+          python3 -m http.server 8000 --directory .pages-site > /tmp/property-check-http.log 2>&1 &
+          echo $! > /tmp/property-check-http.pid
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8000/ >/dev/null && exit 0
+            sleep 1
           done
-          echo "Deployed site did not become reachable: $SITE_URL"
+          cat /tmp/property-check-http.log
           exit 1
 
-      - name: Verify deployed site and live official sources
+      - name: Test live Queensland and Brisbane sources in browser
         env:
-          PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
-          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
 
-      - name: Upload deployed browser evidence
+      - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: property-check-deployed-browser-evidence
-          path: site/tests/deployed-artifacts
+          name: property-check-live-browser-evidence
+          path: site/tests/artifacts
           if-no-files-found: ignore

@@ -1,0 +1,140 @@
+      else value.forEach(collect);
+    };
+    (data.map_layers || []).forEach((layer) => collect(layer.geometry?.coordinates));
+    if (Number.isFinite(data.longitude) && Number.isFinite(data.latitude)) points.push([data.longitude, data.latitude]);
+    group.replaceChildren();
+    markerGroup.replaceChildren();
+    list.replaceChildren();
+    if (!points.length) {
+      const empty = stage.querySelector(".map-empty");
+      if (empty) empty.hidden = false;
+      return;
+    }
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const xSpan = Math.max(maxX - minX, 0.0005), ySpan = Math.max(maxY - minY, 0.0005);
+    minX -= xSpan * 0.13; maxX += xSpan * 0.13; minY -= ySpan * 0.13; maxY += ySpan * 0.13;
+    const sx = (x) => 35 + ((x - minX) / (maxX - minX)) * 690;
+    const sy = (y) => 485 - ((y - minY) / (maxY - minY)) * 450;
+    const createSvg = (name, attrs) => {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
+      return node;
+    };
+    const pathsFor = (geometry) => {
+      if (!geometry) return [];
+      if (geometry.type === "Polygon") return geometry.coordinates.map((ring) => ring);
+      if (geometry.type === "MultiPolygon") return geometry.coordinates.flatMap((polygon) => polygon);
+      if (geometry.type === "LineString") return [geometry.coordinates];
+      if (geometry.type === "MultiLineString") return geometry.coordinates;
+      return [];
+    };
+    for (const layer of data.map_layers || []) {
+      for (const path of pathsFor(layer.geometry)) {
+        if (!path.length) continue;
+        const d = path.map((point, index) => `${index ? "L" : "M"}${sx(point[0]).toFixed(2)} ${sy(point[1]).toFixed(2)}`).join(" ") + (layer.geometry.type.includes("Polygon") ? " Z" : "");
+        group.appendChild(createSvg("path", { d, class: `map-layer role-${layer.style_role || "context"}`, "data-layer-id": layer.layer_id }));
+      }
+      const label = document.createElement("label");
+      label.className = `layer-toggle layer-role-${layer.style_role || "context"}`;
+      label.innerHTML = `<input type="checkbox" data-layer-id="${escapeHtml(layer.layer_id)}" checked><span class="layer-swatch"></span><span><strong>${escapeHtml(layer.label)}</strong><small>${escapeHtml(layer.category)} · live geometry</small></span>`;
+      list.appendChild(label);
+    }
+    if (Number.isFinite(data.longitude) && Number.isFinite(data.latitude)) {
+      markerGroup.appendChild(createSvg("circle", { cx: sx(data.longitude), cy: sy(data.latitude), r: 16, class: "map-marker-halo" }));
+      markerGroup.appendChild(createSvg("circle", { cx: sx(data.longitude), cy: sy(data.latitude), r: 6, class: "map-marker" }));
+    }
+    list.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+      group.querySelectorAll(`.map-layer[data-layer-id="${CSS.escape(input.dataset.layerId)}"]`).forEach((node) => { node.hidden = !input.checked; });
+    }));
+    setText(".map-coordinate", `${Number(data.latitude).toFixed(5)}, ${Number(data.longitude).toFixed(5)}`, stage);
+  }
+
+  function rebuildSources(data) {
+    const grid = document.querySelector(".report-source-grid");
+    if (!grid) return;
+    const byId = new Map();
+    (data.metrics || []).forEach((item) => {
+      const current = byId.get(item.source.source_id);
+      const rank = { live: 3, cached: 2, fixture: 1, unavailable: 0 };
+      if (!current || (rank[item.source.mode] ?? 0) > (rank[current.mode] ?? 0)) byId.set(item.source.source_id, item.source);
+    });
+    grid.innerHTML = [...byId.values()].map((item) => `
+      <a class="report-source-card" href="${escapeHtml(item.authoritative_url)}" target="_blank" rel="noopener">
+        <span class="source-logo">${item.owner.startsWith("Queensland") ? "Q" : "B"}</span>
+        <div><strong>${escapeHtml(item.dataset)}</strong><p>${escapeHtml(item.owner)}</p><small>${item.retrieved_at ? `Retrieved ${escapeHtml(formatDate(item.retrieved_at))}` : "Retrieval date unavailable"}</small></div>
+        <div class="source-card-state"><b class="mode-${escapeHtml(item.mode)}">${escapeHtml(item.mode)}</b><span>↗</span></div>
+      </a>`).join("");
+  }
+
+  function updateAtGlance(data) {
+    const map = new Map(data.metrics.map((item) => [item.metric_id, item]));
+    document.querySelectorAll(".glance-item").forEach((article) => {
+      const button = article.querySelector("[data-metric-id]");
+      const item = map.get(button?.dataset.metricId);
+      if (!item) return;
+      article.className = `glance-item status-border-${item.status}`;
+      setText("span", item.label, article);
+      setText("strong", item.display_value, article);
+      button.setAttribute("aria-label", `View evidence for ${item.label}`);
+    });
+    const detected = data.metrics.filter((item) => item.status === "detected").slice(0, 6);
+    const review = document.querySelector(".review-box");
+    if (review) {
+      const heading = review.querySelector(".review-box-heading b");
+      if (heading) heading.textContent = String(detected.length);
+      review.querySelectorAll(".review-row").forEach((node) => node.remove());
+      review.insertAdjacentHTML("beforeend", detected.map((item) => `<button type="button" class="review-row source-button" data-metric-id="${escapeHtml(item.metric_id)}"><span class="status-dot status-dot-detected"></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.display_value)}</small></div><b>›</b></button>`).join(""));
+      review.hidden = !detected.length;
+    }
+    const unknownBox = document.querySelector(".unknown-box");
+    if (unknownBox) {
+      setText("strong", `${data.summary.unresolved} fact${data.summary.unresolved === 1 ? " is" : "s are"} still unresolved`, unknownBox);
+      unknownBox.hidden = data.summary.unresolved === 0;
+    }
+  }
+
+  function renderLiveReport(data) {
+    window.PROPERTY_DATA = data;
+    document.title = `${data.canonical_address} · Property Check`;
+    const hero = document.querySelector('[data-spa-page="report"] .report-hero');
+    setText(".report-title-block h1", data.canonical_address, hero);
+    const badge = hero?.querySelector(".mode-badge");
+    if (badge) { badge.className = "mode-badge mode-live"; badge.textContent = "Live sources"; }
+    const meta = hero?.querySelectorAll(".report-meta span") || [];
+    if (meta[0]) meta[0].textContent = `${data.parcels.length || data.metrics.find((m) => m.metric_id === "property.parcel_count")?.value || 0} parcel${(data.parcels.length || 0) === 1 ? "" : "s"}`;
+    if (meta[1]) meta[1].textContent = data.local_authority.replace(/\bCITY\b/i, "City");
+    if (meta[2]) meta[2].textContent = `Refreshed ${formatDate(data.refreshed_at)}`;
+    const summary = hero?.querySelectorAll(".report-summary-grid > div:not(.summary-wide) strong") || [];
+    if (summary[0]) summary[0].textContent = String(data.summary.total);
+    if (summary[1]) summary[1].textContent = String(data.summary.sourceCount);
+    if (summary[2]) summary[2].textContent = `${data.summary.coverage}%`;
+    if (summary[3]) summary[3].textContent = String(data.summary.unresolved);
+    const wide = hero?.querySelector(".summary-wide");
+    if (wide) {
+      const dot = wide.querySelector(".source-state-dot");
+      if (dot) dot.className = "source-state-dot source-state-live";
+      setText("strong", "Live report state", wide);
+      setText("small", "Each metric shows the source response and any unresolved limitation.", wide);
+    }
+    const notice = document.querySelector('[data-spa-page="report"] .demo-notice');
+    if (notice) notice.hidden = true;
+    setText(".report-map-panel .panel-heading p", "Toggle live parcel and returned overlay geometries. Cadastral lines remain graphical only.");
+    (data.metrics || []).forEach(updateMetricCard);
+    updateAtGlance(data);
+    rebuildMap(data);
+    rebuildSources(data);
+    const warningStack = document.querySelector(".report-warning-stack");
+    if (warningStack) warningStack.innerHTML = data.warnings.map((warning) => `<div class="report-warning"><span>!</span><p>${escapeHtml(warning)}</p></div>`).join("");
+    document.querySelectorAll(".category-tab").forEach((tab) => {
+      const category = tab.dataset.category;
+      const count = category === "all" ? data.metrics.length : data.metrics.filter((item) => item.category === category).length;
+      const b = tab.querySelector("b"); if (b) b.textContent = String(count);
+    });
+    bindDynamicEvidence();
+    window.dispatchEvent(new CustomEvent("property-check:report-ready", { detail: data }));
+  }
+
+  function renderLoading() {
+    const hero = document.querySelector('[data-spa-page="report"] .report-hero');

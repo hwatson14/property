@@ -1,0 +1,140 @@
+      metrics.push(
+        metric({
+          id: "flood.levels.assigned", category: "Flood", label: "Flood records returned", value: allRows.length,
+          displayValue: `${allRows.length} record${allRows.length === 1 ? "" : "s"}`, status: allRows.length ? "informational" : "not_detected",
+          summary: allRows.length ? "Official parcel-level flood metric records were returned for the resolved lot-on-plan identifiers." : "No parcel-level flood metric records were returned for the resolved lot-on-plan identifiers.",
+          explanation: "This is a record count, not a flood-risk rating or conclusion.", limitations: ["No record returned must not be interpreted as proof that flooding cannot occur."],
+          source: floodSource, raw: { records: allRows, reference_records: floodSettled.value.reference }, priority: 20,
+        }),
+        floodMetric({ id: "flood.fpa.overland_flow", label: "Overland-flow metrics", rows: overland, allRows, refMap, sourceObject: floodSource, explanation: "Groups source metric codes associated with overland flow.", priority: 21 }),
+        floodMetric({ id: "flood.flag.overland_flow", label: "River and creek metrics", rows: riverCreek, allRows, refMap, sourceObject: floodSource, explanation: "Groups source metric codes associated with river or creek flooding.", priority: 22 }),
+        floodMetric({ id: "flood.flag.large_allotment", label: "Storm-tide and coastal metrics", rows: coastal, allRows, refMap, sourceObject: floodSource, explanation: "Groups source metric codes associated with storm tide or coastal flooding.", priority: 23 }),
+        floodMetric({ id: "flood.coastal_hazard", label: "Ground-level and other metrics", rows: [...ground, ...other], allRows, refMap, sourceObject: floodSource, explanation: "Groups remaining parcel metrics, including ground-level fields where returned.", priority: 24 }),
+      );
+    }
+
+    metrics.push(
+      planningMetric({ id: "constraint.bushfire", label: "Bushfire overlay", result: planning.bushfire, dataset: datasets.bushfire, keys: ["ovl2_desc", "description", "ovl2_cat"], explanation: "This identifies mapped City Plan bushfire-overlay records intersecting the property.", priority: 10 }),
+      planningMetric({ id: "constraint.waterway_corridor", label: "Waterway corridor overlay", result: planning.waterway, dataset: datasets.waterway, keys: ["ovl2_desc", "description", "ovl2_cat"], explanation: "This identifies mapped waterway-corridor records intersecting the property.", priority: 12 }),
+    );
+
+    const easementSource = source({
+      id: "qld-qscf-easement",
+      owner: "Queensland Government",
+      dataset: "QSCF Land Parcel Property Framework — Easement parcels",
+      url: `${QSCF}/130`,
+      requestUrl: easementSettled.value?.requestUrls?.join(" | ") || null,
+      mode: easementSettled.error ? "unavailable" : "live",
+      limitation: "This is a mapped screening layer, not a title search and not evidence of the legal effect of an easement.",
+    });
+    const easementFeatures = easementSettled.value?.features || [];
+    easementFeatures.forEach((feature, index) => {
+      const geometry = arcgisGeometryToGeoJson(feature.geometry);
+      if (!geometry) return;
+      mapLayers.push({
+        layer_id: `constraint-mapped-secondary-interests-${index}`,
+        label: featureAttributes(feature).lotplan || `Mapped easement ${index + 1}`,
+        category: "Constraints",
+        style_role: "constraint",
+        geometry,
+        approximate: false,
+        visible_by_default: true,
+        source_metric_ids: ["constraint.mapped_secondary_interests"],
+      });
+    });
+    metrics.push(metric({
+      id: "constraint.mapped_secondary_interests", category: "Constraints", label: "Mapped easement parcels",
+      value: easementFeatures.map(featureAttributes),
+      displayValue: easementSettled.error ? "Source unavailable" : easementFeatures.length ? `${easementFeatures.length} mapped intersection${easementFeatures.length === 1 ? "" : "s"}` : "Not detected in mapped layer",
+      status: easementSettled.error ? "not_assessed" : easementFeatures.length ? "detected" : "not_detected",
+      summary: easementSettled.error ? "The mapped easement source did not return a usable response." : easementFeatures.length ? "One or more mapped easement parcel geometries intersect the resolved parcel." : "No mapped easement parcel geometry intersected the resolved parcel in this screening query.",
+      explanation: "The mapped layer is a prompt for title and conveyancing follow-up, not a legal conclusion.",
+      limitations: ["Only current title documents and legal advice can confirm registered interests and their effect."], source: easementSource,
+      raw: { features: easementFeatures.map(featureAttributes) }, mapLayerIds: mapLayers.filter((layer) => layer.source_metric_ids.includes("constraint.mapped_secondary_interests")).map((layer) => layer.layer_id), priority: 20,
+    }));
+
+    const addressPoint = fallbackPoint || [null, null];
+    const unavailable = metrics.filter((item) => item.status === "not_assessed").length;
+    const uniqueSources = uniq(metrics.map((item) => item.source.source_id)).length;
+    const liveMetrics = metrics.filter((item) => item.source.mode === "live").length;
+    return {
+      property_id: pid,
+      mode: "live",
+      canonical_address: canonicalAddress,
+      address_pid: pid,
+      locality: addressAttrs.locality || "",
+      postcode: String(canonicalAddress).match(/\b\d{4}\b/)?.[0] || "",
+      state: addressAttrs.state || "QLD",
+      local_authority: localAuthorityRaw,
+      latitude: Number(addressAttrs.latitude) || addressPoint[1],
+      longitude: Number(addressAttrs.longitude) || addressPoint[0],
+      refreshed_at: nowIso(),
+      parcels: parcelFeatures.map((feature) => ({ ...featureAttributes(feature), geometry: arcgisGeometryToGeoJson(feature.geometry), geometry_is_approximate: false })),
+      metrics,
+      map_layers: mapLayers,
+      warnings: [
+        "This beta displays sourced screening information. It is not a planning certificate, title search, flood assessment or buying recommendation.",
+        "A source that returns no record is shown only as not detected in that configured dataset, not as proof that the issue is absent.",
+        "Queensland cadastral geometry is graphical and must not be used as the legal survey boundary.",
+      ],
+      summary: { total: metrics.length, sourceCount: uniqueSources, coverage: Math.round((liveMetrics / metrics.length) * 100), unresolved: unavailable },
+    };
+  }
+
+  function formatDate(value) {
+    if (!value) return "Not available";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeZone: "Australia/Brisbane" }).format(date);
+  }
+
+  function setText(selector, value, root = document) {
+    const element = root.querySelector(selector);
+    if (element) element.textContent = value;
+  }
+
+  function updateMetricCard(item) {
+    const article = document.getElementById(`metric-${safeId(item.metric_id)}`);
+    if (!article) return;
+    article.dataset.status = item.status;
+    const pill = article.querySelector(".status-pill");
+    if (pill) {
+      pill.className = `status-pill status-${item.status}`;
+      pill.textContent = item.status.replaceAll("_", " ");
+    }
+    const statusColumn = article.querySelector(".metric-status-column");
+    const existingMapped = statusColumn?.querySelector(".mapped-badge");
+    if (item.map_layer_ids?.length && !existingMapped && statusColumn) statusColumn.insertAdjacentHTML("beforeend", '<span class="mapped-badge">Mapped</span>');
+    if (!item.map_layer_ids?.length && existingMapped) existingMapped.remove();
+    setText(".metric-title-row h4", item.label, article);
+    setText(".metric-title-row strong", item.display_value, article);
+    setText(".metric-summary", item.summary, article);
+    const explanation = article.querySelector(".metric-explanation");
+    if (explanation) {
+      const paragraph = explanation.querySelector("p");
+      if (paragraph) paragraph.textContent = item.explanation;
+      let list = explanation.querySelector("ul");
+      if (!list) {
+        list = document.createElement("ul");
+        explanation.appendChild(list);
+      }
+      list.innerHTML = (item.limitations || []).map((value) => `<li>${escapeHtml(value)}</li>`).join("");
+    }
+    const mode = article.querySelector(".metric-source-mode");
+    if (mode) {
+      mode.className = `metric-source-mode mode-${item.source.mode}`;
+      mode.textContent = item.source.mode;
+    }
+    setText(".metric-evidence small", item.source.owner, article);
+  }
+
+  function rebuildMap(data) {
+    const group = document.getElementById("map-geometry");
+    const markerGroup = document.getElementById("map-property-marker");
+    const stage = document.getElementById("property-map");
+    const list = document.querySelector(".map-layer-list");
+    if (!group || !markerGroup || !stage || !list) return;
+    const points = [];
+    const collect = (value) => {
+      if (!Array.isArray(value)) return;
+      if (value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1])) points.push([value[0], value[1]]);

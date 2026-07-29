@@ -1,0 +1,97 @@
+    const badge = hero?.querySelector(".mode-badge");
+    if (badge) { badge.className = "mode-badge mode-live"; badge.textContent = "Loading live sources"; }
+    setText(".report-title-block h1", "Loading selected property…", hero);
+    const notice = document.querySelector('[data-spa-page="report"] .demo-notice');
+    if (notice) {
+      notice.hidden = false;
+      setText("span", "LIVE LOOKUP", notice);
+      setText("p", "Resolving the address, parcel, planning, flood and mapped constraint sources. Unknowns will remain explicit.", notice);
+    }
+  }
+
+  function renderFailure(error) {
+    const hero = document.querySelector('[data-spa-page="report"] .report-hero');
+    const badge = hero?.querySelector(".mode-badge");
+    if (badge) { badge.className = "mode-badge mode-unavailable"; badge.textContent = "Source unavailable"; }
+    setText(".report-title-block h1", "Property report unavailable", hero);
+    const notice = document.querySelector('[data-spa-page="report"] .demo-notice');
+    if (notice) {
+      notice.hidden = false;
+      setText("span", "NO RESULT GUESSED", notice);
+      setText("p", error.message || "The live sources did not return a usable property report. Try again or open the verified demonstration property.", notice);
+    }
+    window.dispatchEvent(new CustomEvent("property-check:report-failed", { detail: { message: error.message } }));
+  }
+
+  function openDynamicEvidence(metricId) {
+    const data = window.PROPERTY_DATA;
+    const item = data?.metrics?.find((candidate) => candidate.metric_id === metricId);
+    const dialog = document.getElementById("source-dialog");
+    if (!item || !dialog) return;
+    setText("#dialog-title", item.label, dialog);
+    setText("#dialog-result", item.display_value, dialog);
+    setText("#dialog-summary", item.summary, dialog);
+    setText("#dialog-owner", item.source.owner, dialog);
+    setText("#dialog-dataset", item.source.dataset, dialog);
+    setText("#dialog-mode", item.source.mode, dialog);
+    setText("#dialog-retrieved", item.source.retrieved_at ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short", timeZone: "Australia/Brisbane" }).format(new Date(item.source.retrieved_at)) : "Not available", dialog);
+    const list = dialog.querySelector("#dialog-limitations");
+    if (list) {
+      const limitations = uniq([...(item.limitations || []), item.source.limitation]);
+      list.innerHTML = limitations.map((value) => `<li>${escapeHtml(value)}</li>`).join("") || "<li>No source limitation was supplied.</li>";
+    }
+    const link = dialog.querySelector("#dialog-source-link");
+    if (link) link.href = item.source.authoritative_url;
+    const raw = dialog.querySelector("#dialog-raw");
+    if (raw) { raw.textContent = JSON.stringify({ metric_id: item.metric_id, status: item.status, source: item.source, raw: item.raw }, null, 2); raw.hidden = true; }
+    const toggle = dialog.querySelector("#dialog-raw-toggle"); if (toggle) toggle.textContent = "Show raw record";
+    if (!dialog.open) dialog.showModal();
+    document.body.classList.add("dialog-open");
+  }
+
+  let evidenceBound = false;
+  function bindDynamicEvidence() {
+    if (evidenceBound) return;
+    evidenceBound = true;
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest?.(".source-button[data-metric-id]");
+      if (!button || window.PROPERTY_DATA?.mode !== "live") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openDynamicEvidence(button.dataset.metricId);
+    }, true);
+  }
+
+  let activePid = null;
+  async function maybeLoadReport() {
+    const raw = (window.location.hash || "").replace(/^#\//, "");
+    const parts = raw.split("/");
+    if (parts[0] !== "report" || !parts[1]) return;
+    const pid = decodeURIComponent(parts[1]);
+    if (!pid || pid === activePid) return;
+    activePid = pid;
+    renderLoading();
+    try {
+      const data = await buildLiveProperty(pid);
+      renderLiveReport(data);
+    } catch (error) {
+      activePid = null;
+      renderFailure(error);
+    }
+  }
+
+  function initialiseCopy() {
+    const banner = document.querySelector(".demo-hosted-banner");
+    if (banner) banner.textContent = "Live Brisbane beta. Official sources are queried in your browser; the verified 28 Annie Street fixture remains available if a source is unavailable.";
+    const help = document.querySelector(".search-help");
+    if (help) help.innerHTML = '<span class="live-dot"></span> Live Brisbane address lookup using Queensland and Brisbane City Council sources.';
+    const footer = document.querySelector(".footer-bottom span");
+    if (footer) footer.textContent = "Property Check v0.4.0 · Live Brisbane beta";
+    window.PROPERTY_CHECK_STATIC_DEMO = false;
+    bindDynamicEvidence();
+  }
+
+  window.PropertyCheckLive = { searchAddresses, buildLiveProperty };
+  window.addEventListener("hashchange", maybeLoadReport);
+  window.addEventListener("load", () => { initialiseCopy(); maybeLoadReport(); });
+})();
