@@ -63,6 +63,10 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   if (reportState.status !== 'ready' || reportState.badge !== 'Live sources') throw new Error(`Live report failed for ${query}. State: ${JSON.stringify(reportState)}`);
 
   await page.locator('.lemoncheck-decision-section').waitFor({ state: 'visible', timeout: 20000 });
+  await page.waitForFunction(() => {
+    const assessment = window.LEMONCHECK_ASSESSMENT;
+    return assessment?.modelVersion === 'LC-BNE-5L-v0.2.1' && assessment?.governanceVersion === 'LC-BNE-5L-v0.2.1';
+  }, null, { timeout: 20000 });
   await page.locator('#context-property-map').waitFor({ state: 'visible', timeout: 20000 });
   await page.locator('#context-property-map .context-map-overlay path').first().waitFor({ state: 'attached', timeout: 20000 });
   await page.locator('#context-property-map .context-map-attribution').waitFor({ state: 'visible', timeout: 10000 });
@@ -87,17 +91,31 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   if (floodMetrics.every((metric) => metric.source?.mode === 'unavailable')) throw new Error('All flood metrics were unavailable');
 
   const initialAssessment = await page.evaluate(() => window.LEMONCHECK_ASSESSMENT);
-  if (!initialAssessment || initialAssessment.modelVersion !== 'LC-BNE-5L-v0.2.0') throw new Error(`Five-score assessment missing: ${JSON.stringify(initialAssessment)}`);
+  if (!initialAssessment || initialAssessment.modelVersion !== 'LC-BNE-5L-v0.2.1') throw new Error(`Governed five-score assessment missing: ${JSON.stringify(initialAssessment)}`);
   if (!Number.isFinite(initialAssessment.objective?.lemonScore) || initialAssessment.objective.lemonScore < 0 || initialAssessment.objective.lemonScore > 100) throw new Error(`Invalid Lemon Score: ${JSON.stringify(initialAssessment.objective)}`);
-  if (!Number.isFinite(initialAssessment.confidence?.score) || initialAssessment.confidence.score < 0 || initialAssessment.confidence.score > 100) throw new Error(`Invalid Confidence Score: ${JSON.stringify(initialAssessment.confidence)}`);
+  if (!Number.isFinite(initialAssessment.confidence?.publicSourceScore) || initialAssessment.confidence.publicSourceScore < 0 || initialAssessment.confidence.publicSourceScore > 100) throw new Error(`Invalid public-source confidence: ${JSON.stringify(initialAssessment.confidence)}`);
+  if (!Number.isFinite(initialAssessment.confidence?.score) || initialAssessment.confidence.score < 0 || initialAssessment.confidence.score > 55) throw new Error(`Whole-assessment confidence exceeded current breadth cap: ${JSON.stringify(initialAssessment.confidence)}`);
+  if (!initialAssessment.confidence.gaps?.includes('Building and pest evidence')) throw new Error(`Whole-assessment evidence gaps missing: ${JSON.stringify(initialAssessment.confidence.gaps)}`);
   if (initialAssessment.development?.score !== null && (!Number.isFinite(initialAssessment.development.score) || initialAssessment.development.score < 0 || initialAssessment.development.score > 100)) throw new Error(`Invalid Development Potential: ${JSON.stringify(initialAssessment.development)}`);
   if (initialAssessment.deal?.score !== null || initialAssessment.fit?.score !== null) throw new Error('Deal and Personal Fit should wait for buyer inputs on a fresh test browser');
+  if (!Array.isArray(initialAssessment.flags) || !Array.isArray(initialAssessment.advisories)) throw new Error('Hard-flag and advisory separation missing');
+  if (initialAssessment.flags.some((flag) => flag.severity === 'advisory')) throw new Error(`Advisory leaked into hard flags: ${JSON.stringify(initialAssessment.flags)}`);
 
   const scoreLabels = await page.locator('.lc-score-card-head > span').allTextContents();
   for (const required of ['Lemon Score', 'Deal Score', 'Personal Fit', 'Development Potential', 'Confidence']) {
     if (!scoreLabels.includes(required)) throw new Error(`Missing score lens ${required}: ${JSON.stringify(scoreLabels)}`);
   }
   if (await page.locator('.prototype-scores-section:visible').count()) throw new Error('Superseded Prototype Lemon Risk section is still visible');
+
+  const initialUiState = await page.evaluate(() => ({
+    hardCount: Number(document.querySelector('.lc-decision-grid .lc-panel:first-child .lc-panel-head > b')?.textContent || '-1'),
+    advisoryVisible: Boolean(document.querySelector('.lc-advisory-block:not([hidden])')),
+    advisoryCount: Number(document.querySelector('.lc-advisory-head > b')?.textContent || '0'),
+    modelLabel: document.querySelector('.lc-model-label')?.textContent || '',
+  }));
+  if (initialUiState.hardCount !== initialAssessment.flags.length) throw new Error(`Hard-flag UI count mismatch: ${JSON.stringify(initialUiState)}`);
+  if (initialAssessment.advisories.length && (!initialUiState.advisoryVisible || initialUiState.advisoryCount !== initialAssessment.advisories.length)) throw new Error(`Advisory UI mismatch: ${JSON.stringify(initialUiState)}`);
+  if (!/LC-BNE-5L-v0\.2\.1/.test(initialUiState.modelLabel)) throw new Error(`Governed model label missing: ${initialUiState.modelLabel}`);
 
   const form = page.locator('.lc-profile-form');
   await form.locator('[name="goal"]').selectOption('live_in');
@@ -110,7 +128,7 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
 
   await page.waitForFunction(() => {
     const assessment = window.LEMONCHECK_ASSESSMENT;
-    return Number.isFinite(assessment?.deal?.score) && Number.isFinite(assessment?.fit?.score);
+    return assessment?.modelVersion === 'LC-BNE-5L-v0.2.1' && Number.isFinite(assessment?.deal?.score) && Number.isFinite(assessment?.fit?.score);
   }, null, { timeout: 10000 });
 
   const assessment = await page.evaluate(() => window.LEMONCHECK_ASSESSMENT);
@@ -120,11 +138,14 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
     fit: assessment.fit.score,
     development: assessment.development.score,
     confidence: assessment.confidence.score,
+    publicSourceConfidence: assessment.confidence.publicSourceScore,
   })) {
     if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) throw new Error(`Invalid ${name} score: ${value}`);
   }
+  if (assessment.confidence.score > 55) throw new Error(`Whole-assessment confidence exceeded 55: ${assessment.confidence.score}`);
   if (!assessment.decision?.title) throw new Error('Decision summary missing');
-  if (!Array.isArray(assessment.flags)) throw new Error('Hard flags missing');
+  if (!Array.isArray(assessment.flags) || !Array.isArray(assessment.advisories)) throw new Error('Hard flags or advisories missing after buyer update');
+  if (assessment.flags.some((flag) => flag.severity === 'advisory')) throw new Error('Advisory leaked into governed hard flags after buyer update');
 
   const mapState = await page.evaluate(() => ({
     mapExists: Boolean(document.querySelector('#context-property-map .context-map-overlay')),
@@ -156,7 +177,9 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
     fitScore: assessment.fit.score,
     developmentScore: assessment.development.score,
     confidenceScore: assessment.confidence.score,
+    publicSourceConfidence: assessment.confidence.publicSourceScore,
     hardFlags: assessment.flags.length,
+    advisories: assessment.advisories.length,
   };
 }
 
