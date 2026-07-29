@@ -10,13 +10,26 @@ const failures = [];
 
 async function testAddress(page, query, expectedPattern, screenshotName) {
   await page.goto(`${baseUrl}#/home`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+  const searchPayload = await page.evaluate(async (value) => {
+    const response = await fetch(`/api/address-search?q=${encodeURIComponent(value)}`, { headers: { Accept: 'application/json' } });
+    return { status: response.status, body: await response.json() };
+  }, query);
+  console.log(`[address-search] ${query}: ${JSON.stringify(searchPayload)}`);
+  const directLive = Array.isArray(searchPayload.body?.results)
+    ? searchPayload.body.results.filter((item) => item.source_mode === 'live')
+    : [];
+  if (!directLive.length) {
+    throw new Error(`No live address result for ${query}. Response: ${JSON.stringify(searchPayload)}`);
+  }
+
   await page.locator('#address-search').fill(query);
   await page.locator('[data-search-submit]').click();
 
   const liveRows = page.locator('.search-result-row').filter({ has: page.locator('.result-mode-live') });
   await liveRows.first().waitFor({ state: 'visible', timeout: 30000 });
   const before = await liveRows.count();
-  if (before < 1) throw new Error(`No live address result for ${query}`);
+  if (before < 1) throw new Error(`No live address result rendered for ${query}`);
 
   const row = liveRows.filter({ hasText: expectedPattern }).first();
   const selected = (await row.count()) ? row : liveRows.first();
