@@ -20,7 +20,14 @@ async function openAddress(page, query, pattern) {
     const regex = new RegExp(source, flags);
     return window.PROPERTY_DATA?.mode === 'live' && regex.test(window.PROPERTY_DATA?.canonical_address || '') && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1';
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
-  await page.waitForFunction(() => window.LEMONCHECK_ASSESSMENT?.pricingClientVersion === 'LC-PRICE-CLIENT-v0.1.0' && window.LEMONCHECK_PRICING?.schemaVersion === 'LC-PRICE-v0.1.0', null, { timeout: 25000 });
+  await page.waitForFunction(() => {
+    const propertyId = String(window.PROPERTY_DATA?.property_id || '');
+    return propertyId
+      && window.LEMONCHECK_ASSESSMENT?.pricingClientVersion === 'LC-PRICE-CLIENT-v0.1.0'
+      && window.LEMONCHECK_PRICING?.schemaVersion === 'LC-PRICE-v0.1.0'
+      && String(window.LEMONCHECK_PRICING_PROPERTY_ID || '') === propertyId
+      && String(window.LEMONCHECK_PRICING?.lemoncheckPropertyId || '') === propertyId;
+  }, null, { timeout: 25000 });
 }
 
 async function validateAnnie(page) {
@@ -28,7 +35,7 @@ async function validateAnnie(page) {
   try {
     await page.waitForFunction(() => Number.isFinite(window.LEMONCHECK_ASSESSMENT?.deal?.score), null, { timeout: 15000 });
   } catch (error) {
-    const debug = await page.evaluate(() => ({ pricing: window.LEMONCHECK_PRICING, assessment: window.LEMONCHECK_ASSESSMENT, panel: document.querySelector('.lc-pricing-panel')?.textContent || '' }));
+    const debug = await page.evaluate(() => ({ pricing: window.LEMONCHECK_PRICING, pricingPropertyId: window.LEMONCHECK_PRICING_PROPERTY_ID, assessment: window.LEMONCHECK_ASSESSMENT, panel: document.querySelector('.lc-pricing-panel')?.textContent || '' }));
     throw new Error(`Automated Deal Score did not settle. ${JSON.stringify(debug)}`);
   }
   const state = await page.evaluate(() => ({
@@ -54,8 +61,9 @@ async function validateAnnie(page) {
 
 async function validateWilliam(page) {
   await openAddress(page, '1 William Street Brisbane City QLD 4000', /\b1\s+William\s+Street/i);
-  const before = await page.evaluate(() => ({ pricing: window.LEMONCHECK_PRICING, deal: window.LEMONCHECK_ASSESSMENT?.deal }));
-  if (before.pricing?.listing?.displayPrice !== 'Auction' || before.pricing?.listing?.price?.numeric !== false) throw new Error('Auction listing was incorrectly converted to a number');
+  const before = await page.evaluate(() => ({ pricing: window.LEMONCHECK_PRICING, pricingPropertyId: window.LEMONCHECK_PRICING_PROPERTY_ID, currentPropertyId: String(window.PROPERTY_DATA?.property_id || ''), deal: window.LEMONCHECK_ASSESSMENT?.deal }));
+  if (before.pricingPropertyId !== before.currentPropertyId) throw new Error(`Stale pricing crossed property reports: ${JSON.stringify(before)}`);
+  if (before.pricing?.listing?.displayPrice !== 'Auction' || before.pricing?.listing?.price?.numeric !== false) throw new Error(`Auction listing was incorrectly converted to a number: ${JSON.stringify(before.pricing?.listing)}`);
   if (before.deal?.score !== null) throw new Error(`Deal Score should wait for intended offer on auction: ${JSON.stringify(before.deal)}`);
 
   const form = page.locator('.lc-profile-form');
