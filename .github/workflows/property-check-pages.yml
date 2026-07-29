@@ -43,10 +43,26 @@ jobs:
           echo "cc3561dda4bda26473747f7f90a47f6145dd196166b6e8ff9442d0a0ab118faa  .pages-site/index.html" | sha256sum -c -
           echo "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad  .pages-site/live-property.js" | sha256sum -c -
           node --check .pages-site/live-property.js
+          cp site/favicon.svg site/enhancements.js site/enhancements.css site/map-initial-state.js .pages-site/
+          node --check .pages-site/enhancements.js
+          node --check .pages-site/map-initial-state.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.pages-site/index.html')
+          s = p.read_text(encoding='utf-8')
+          head = '''  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+            <link rel="stylesheet" href="./enhancements.css">'''
+          scripts = '''  <script src="./enhancements.js"></script>
+            <script src="./map-initial-state.js"></script>'''
+          s = s.replace('</head>', f'{head}\n</head>', 1)
+          s = s.replace('</body>', f'{scripts}\n</body>', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
           grep -Fq '<script src="./live-property.js"></script>' .pages-site/index.html
-          cp site/favicon.svg .pages-site/favicon.svg
-          python3 -c "from pathlib import Path; p=Path('.pages-site/index.html'); s=p.read_text(encoding='utf-8'); p.write_text(s.replace('</head>', '  <link rel=\"icon\" type=\"image/svg+xml\" href=\"./favicon.svg\">\\n</head>', 1), encoding='utf-8')"
-          grep -Fq 'href="./favicon.svg"' .pages-site/index.html
+          grep -Fq 'href="./enhancements.css"' .pages-site/index.html
+          grep -Fq 'src="./enhancements.js"' .pages-site/index.html
+          grep -Fq 'src="./map-initial-state.js"' .pages-site/index.html
+          ! grep -Fq 'leaflet' .pages-site/index.html
           touch .pages-site/.nojekyll
 
       - name: Configure GitHub Pages
