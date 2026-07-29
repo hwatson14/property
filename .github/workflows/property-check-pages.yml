@@ -43,12 +43,13 @@ jobs:
           echo "cc3561dda4bda26473747f7f90a47f6145dd196166b6e8ff9442d0a0ab118faa  .pages-site/index.html" | sha256sum -c -
           echo "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad  .pages-site/live-property.js" | sha256sum -c -
           node --check .pages-site/live-property.js
-          cp site/favicon.svg site/enhancements.js site/enhancements.css site/map-initial-state.js site/decision-layer-guard.js site/decision-layer.js site/decision-layer.css site/decision-governance.js site/decision-governance.css .pages-site/
+          cp site/favicon.svg site/enhancements.js site/enhancements.css site/map-initial-state.js site/decision-layer-guard.js site/decision-layer.js site/decision-layer.css site/decision-governance.js site/decision-governance.css site/shortlist.js site/shortlist.css .pages-site/
           node --check .pages-site/enhancements.js
           node --check .pages-site/map-initial-state.js
           node --check .pages-site/decision-layer-guard.js
           node --check .pages-site/decision-layer.js
           node --check .pages-site/decision-governance.js
+          node --check .pages-site/shortlist.js
           python3 - <<'PY'
           from pathlib import Path
           p = Path('.pages-site/index.html')
@@ -56,12 +57,14 @@ jobs:
           head = '''  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
             <link rel="stylesheet" href="./enhancements.css">
             <link rel="stylesheet" href="./decision-layer.css">
-            <link rel="stylesheet" href="./decision-governance.css">'''
+            <link rel="stylesheet" href="./decision-governance.css">
+            <link rel="stylesheet" href="./shortlist.css">'''
           scripts = '''  <script src="./enhancements.js"></script>
             <script src="./map-initial-state.js"></script>
             <script src="./decision-layer-guard.js"></script>
             <script src="./decision-layer.js"></script>
-            <script src="./decision-governance.js"></script>'''
+            <script src="./decision-governance.js"></script>
+            <script src="./shortlist.js"></script>'''
           s = s.replace('</head>', f'{head}\n</head>', 1)
           s = s.replace('</body>', f'{scripts}\n</body>', 1)
           p.write_text(s, encoding='utf-8')
@@ -70,12 +73,15 @@ jobs:
           grep -Fq 'href="./enhancements.css"' .pages-site/index.html
           grep -Fq 'href="./decision-layer.css"' .pages-site/index.html
           grep -Fq 'href="./decision-governance.css"' .pages-site/index.html
+          grep -Fq 'href="./shortlist.css"' .pages-site/index.html
           grep -Fq 'src="./enhancements.js"' .pages-site/index.html
           grep -Fq 'src="./map-initial-state.js"' .pages-site/index.html
           grep -Fq 'src="./decision-layer-guard.js"' .pages-site/index.html
           grep -Fq 'src="./decision-layer.js"' .pages-site/index.html
           grep -Fq 'src="./decision-governance.js"' .pages-site/index.html
+          grep -Fq 'src="./shortlist.js"' .pages-site/index.html
           grep -Fq 'LC-BNE-5L-v0.2.1' .pages-site/decision-governance.js
+          grep -Fq 'LC-COMPARE-v0.1.0' .pages-site/shortlist.js
           ! grep -Fq 'leaflet' .pages-site/index.html
           touch .pages-site/.nojekyll
 
@@ -116,12 +122,12 @@ jobs:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
           for i in {1..60}; do
-            if curl --fail --silent --location "$SITE_URL/decision-governance.js" | grep -Fq 'LC-BNE-5L-v0.2.1'; then
+            if curl --fail --silent --location "$SITE_URL/shortlist.js" | grep -Fq 'LC-COMPARE-v0.1.0'; then
               exit 0
             fi
             sleep 2
           done
-          echo "Deployed governed five-score site did not become reachable: $SITE_URL"
+          echo "Deployed saved-comparison site did not become reachable: $SITE_URL"
           exit 1
 
       - name: Verify deployed site and live official sources
@@ -130,6 +136,13 @@ jobs:
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
+
+      - name: Verify deployed saved-property comparison
+        env:
+          PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/comparison-smoke.mjs
 
       - name: Upload deployed browser evidence
         if: always()
