@@ -1,4 +1,4 @@
-name: Deploy Property Check demo
+name: Deploy Property Check live beta
 
 on:
   push:
@@ -25,13 +25,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: Build live static site
+        run: |
+          rm -rf .pages-site
+          mkdir -p .pages-site
+          python3 site/build-live-site.py site/index.html .pages-site/index.html
+          cat site/live-property.parts/*.js.part > .pages-site/live-property.js
+          node --check .pages-site/live-property.js
+          touch .pages-site/.nojekyll
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+
       - name: Upload static site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: .pages-site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
