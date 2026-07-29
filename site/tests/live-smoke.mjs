@@ -26,13 +26,12 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
   await page.locator('#address-search').fill(query);
   await page.locator('[data-search-submit]').click();
 
-  const liveRows = page.locator('.search-result-row').filter({ has: page.locator('.result-mode-live') });
-  await liveRows.first().waitFor({ state: 'visible', timeout: 30000 });
-  const before = await liveRows.count();
-  if (before < 1) throw new Error(`No live address result rendered for ${query}`);
-
-  const row = liveRows.filter({ hasText: expectedPattern }).first();
-  const selected = (await row.count()) ? row : liveRows.first();
+  const selected = page
+    .locator('.search-result-row')
+    .filter({ has: page.locator('.result-mode-live') })
+    .filter({ hasText: expectedPattern })
+    .first();
+  await selected.waitFor({ state: 'visible', timeout: 30000 });
   const rowText = await selected.innerText();
   if (!expectedPattern.test(rowText)) throw new Error(`Unexpected address result for ${query}: ${rowText}`);
 
