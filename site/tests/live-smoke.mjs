@@ -50,14 +50,14 @@ async function testAddress(page, query, expectedPattern, screenshotName) {
     dataMode: window.PROPERTY_DATA?.mode || null,
   }));
   console.log(`[report-state] ${query}: ${JSON.stringify(reportState)}`);
-  if (reportState.dataMode !== 'live') {
+  if (reportState.dataMode !== 'live' || reportState.badge !== 'Live sources') {
     throw new Error(`Live report failed for ${query}. State: ${JSON.stringify(reportState)}`);
   }
 
   await page.locator('.mode-badge').waitFor({ state: 'visible', timeout: 10000 });
   const title = await page.locator('.report-title-block h1').innerText();
   if (!expectedPattern.test(title)) throw new Error(`Report title did not match ${expectedPattern}: ${title}`);
-  if ((await page.locator('.mode-badge').innerText()).trim() !== 'Live sources') throw new Error('Report did not enter live source mode');
+  if ((await page.locator('.mode-badge').innerText()).trim().toLowerCase() !== 'live sources') throw new Error('Report did not enter live source mode');
 
   const data = await page.evaluate(() => window.PROPERTY_DATA);
   if (!data || data.mode !== 'live') throw new Error('PROPERTY_DATA live payload missing');
