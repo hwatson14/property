@@ -43,9 +43,10 @@ jobs:
           echo "cc3561dda4bda26473747f7f90a47f6145dd196166b6e8ff9442d0a0ab118faa  .pages-site/index.html" | sha256sum -c -
           echo "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad  .pages-site/live-property.js" | sha256sum -c -
           node --check .pages-site/live-property.js
-          cp site/favicon.svg site/enhancements.js site/enhancements.css site/map-initial-state.js site/decision-layer.js site/decision-layer.css .pages-site/
+          cp site/favicon.svg site/enhancements.js site/enhancements.css site/map-initial-state.js site/decision-layer-guard.js site/decision-layer.js site/decision-layer.css .pages-site/
           node --check .pages-site/enhancements.js
           node --check .pages-site/map-initial-state.js
+          node --check .pages-site/decision-layer-guard.js
           node --check .pages-site/decision-layer.js
           python3 - <<'PY'
           from pathlib import Path
@@ -56,6 +57,7 @@ jobs:
             <link rel="stylesheet" href="./decision-layer.css">'''
           scripts = '''  <script src="./enhancements.js"></script>
             <script src="./map-initial-state.js"></script>
+            <script src="./decision-layer-guard.js"></script>
             <script src="./decision-layer.js"></script>'''
           s = s.replace('</head>', f'{head}\n</head>', 1)
           s = s.replace('</body>', f'{scripts}\n</body>', 1)
@@ -66,6 +68,7 @@ jobs:
           grep -Fq 'href="./decision-layer.css"' .pages-site/index.html
           grep -Fq 'src="./enhancements.js"' .pages-site/index.html
           grep -Fq 'src="./map-initial-state.js"' .pages-site/index.html
+          grep -Fq 'src="./decision-layer-guard.js"' .pages-site/index.html
           grep -Fq 'src="./decision-layer.js"' .pages-site/index.html
           grep -Fq 'LC-BNE-5L-v0.2.0' .pages-site/decision-layer.js
           ! grep -Fq 'leaflet' .pages-site/index.html
