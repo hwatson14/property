@@ -35,18 +35,18 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for score and context-map build to be served
+      - name: Wait for governed five-score build to be served
         run: |
           for i in {1..120}; do
             if curl --fail --silent --location --max-time 15 \
-              https://hwatson14.github.io/property/enhancements.js \
-              | grep -Fq 'Prototype Lemon Risk'; then
-              echo "Score and context-map enhancement bundle is deployed."
+              https://hwatson14.github.io/property/decision-governance.js \
+              | grep -Fq 'LC-BNE-5L-v0.2.1'; then
+              echo "Governed five-score bundle is deployed."
               exit 0
             fi
             sleep 2
           done
-          echo "The score and context-map enhancement bundle did not become available."
+          echo "The governed five-score bundle did not become available."
           exit 1
 
       - name: Verify public site and official data sources
