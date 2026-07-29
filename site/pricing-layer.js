@@ -147,7 +147,9 @@
     if (text) text.textContent = `${assessment.decision.text} This remains a shortlist screen, not a valuation or buying recommendation.`;
   }
 
-  function applyPricing(pricing, assessment) {
+  function applyPricing(pricing, assessment, propertyId) {
+    const clientPropertyId = String(propertyId || assessment.propertyId || window.PROPERTY_DATA?.property_id || "");
+    pricing.lemoncheckPropertyId = clientPropertyId;
     const deal = automatedDeal(pricing, assessment);
     assessment.deal = deal;
     assessment.pricing = pricing;
@@ -164,8 +166,9 @@
       if (!Array.isArray(pricing.saleHistory) || !pricing.saleHistory.length) assessment.confidence.gaps.push("Comparable sales validation");
     }
     window.LEMONCHECK_PRICING = pricing;
+    window.LEMONCHECK_PRICING_PROPERTY_ID = clientPropertyId;
     window.LEMONCHECK_ASSESSMENT = assessment;
-    if (window.PROPERTY_DATA) {
+    if (window.PROPERTY_DATA && String(window.PROPERTY_DATA.property_id) === clientPropertyId) {
       window.PROPERTY_DATA.pricing = pricing;
       window.PROPERTY_DATA.five_score_assessment = assessment;
     }
@@ -173,13 +176,13 @@
     updateScoreCard("confidence", assessment.confidence.score, `Whole-assessment confidence including automated pricing evidence. Connected public-source confidence remains ${assessment.confidence.publicSourceScore ?? "not available"}/100.`);
     updateDecision(assessment);
     renderPricing(pricing, deal);
-    window.dispatchEvent(new CustomEvent("lemoncheck:pricing-ready", { detail: { pricing, assessment } }));
+    window.dispatchEvent(new CustomEvent("lemoncheck:pricing-ready", { detail: { pricing, assessment, propertyId: clientPropertyId } }));
   }
 
   function markUnavailable(assessment, message, propertyId) {
     const existing = pricingByPropertyId.get(String(propertyId || ""));
     if (existing) {
-      applyPricing(existing, assessment);
+      applyPricing(existing, assessment, propertyId);
       return;
     }
     assessment.deal = { score: null, reason: message };
@@ -187,7 +190,7 @@
     window.LEMONCHECK_ASSESSMENT = assessment;
     updateScoreCard("deal", null, message);
     renderStatus({ state: "unavailable", title: "Automated pricing unavailable", text: message });
-    window.dispatchEvent(new CustomEvent("lemoncheck:pricing-ready", { detail: { pricing: null, assessment } }));
+    window.dispatchEvent(new CustomEvent("lemoncheck:pricing-ready", { detail: { pricing: null, assessment, propertyId: String(propertyId || "") } }));
   }
 
   function stableQueryAddress(data, propertyId) {
@@ -215,10 +218,15 @@
     const propertyId = String(data.property_id);
     const base = String(window.LEMONCHECK_PRICING_API_BASE || "").replace(/\/$/, "");
 
+    if (String(window.LEMONCHECK_PRICING_PROPERTY_ID || "") !== propertyId) {
+      window.LEMONCHECK_PRICING = null;
+      window.LEMONCHECK_PRICING_PROPERTY_ID = propertyId;
+    }
+
     const retained = pricingByPropertyId.get(propertyId) || (data.pricing?.propertyMatch?.quality === "exact" ? data.pricing : null);
     if (retained) {
       pricingByPropertyId.set(propertyId, retained);
-      applyPricing(retained, assessment);
+      applyPricing(retained, assessment, propertyId);
       return;
     }
 
@@ -238,6 +246,7 @@
           return validatePricing(payload);
         })
         .then((pricing) => {
+          pricing.lemoncheckPropertyId = propertyId;
           pricingByPropertyId.set(propertyId, pricing);
           return pricing;
         })
@@ -248,11 +257,11 @@
     try {
       const pricing = await promise;
       if (String(window.PROPERTY_DATA?.property_id) !== propertyId) return;
-      applyPricing(pricing, assessment);
+      applyPricing(pricing, assessment, propertyId);
     } catch (error) {
       const existing = pricingByPropertyId.get(propertyId);
       if (String(window.PROPERTY_DATA?.property_id) !== propertyId) return;
-      if (existing) applyPricing(existing, assessment);
+      if (existing) applyPricing(existing, assessment, propertyId);
       else markUnavailable(assessment, error.message || "The automated pricing provider failed.", propertyId);
     }
   }
