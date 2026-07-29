@@ -20,11 +20,17 @@ async function openAddress(page, query, pattern) {
     const regex = new RegExp(source, flags);
     return window.PROPERTY_DATA?.mode === 'live' && regex.test(window.PROPERTY_DATA?.canonical_address || '') && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1';
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
-  await page.waitForFunction(() => window.LEMONCHECK_ASSESSMENT?.pricingClientVersion === 'LC-PRICE-CLIENT-v0.1.0', null, { timeout: 20000 });
+  await page.waitForFunction(() => window.LEMONCHECK_ASSESSMENT?.pricingClientVersion === 'LC-PRICE-CLIENT-v0.1.0' && window.LEMONCHECK_PRICING?.schemaVersion === 'LC-PRICE-v0.1.0', null, { timeout: 25000 });
 }
 
 async function validateAnnie(page) {
   await openAddress(page, '28 Annie Street Hamilton QLD 4007', /28\s+Annie\s+Street/i);
+  try {
+    await page.waitForFunction(() => Number.isFinite(window.LEMONCHECK_ASSESSMENT?.deal?.score), null, { timeout: 15000 });
+  } catch (error) {
+    const debug = await page.evaluate(() => ({ pricing: window.LEMONCHECK_PRICING, assessment: window.LEMONCHECK_ASSESSMENT, panel: document.querySelector('.lc-pricing-panel')?.textContent || '' }));
+    throw new Error(`Automated Deal Score did not settle. ${JSON.stringify(debug)}`);
+  }
   const state = await page.evaluate(() => ({
     pricing: window.LEMONCHECK_PRICING,
     assessment: window.LEMONCHECK_ASSESSMENT,
