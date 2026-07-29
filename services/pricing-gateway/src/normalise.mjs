@@ -15,6 +15,13 @@ export function normaliseAddress(value) {
     .replace(/\s+/g, ' ');
 }
 
+function addressIdentity(value) {
+  const normalised = normaliseAddress(value);
+  const postcode = normalised.match(/\b\d{4}\b/)?.[0] || null;
+  const core = normalised.replace(/\b\d{4}\b/g, '').replace(/\s+/g, ' ').trim();
+  return { normalised, core, postcode };
+}
+
 function moneyNumber(token) {
   if (!token) return null;
   const clean = String(token).toLowerCase().replace(/a\$|\$|,/g, '').trim();
@@ -49,14 +56,18 @@ export function parseDisplayPrice(displayPrice) {
 }
 
 export function exactAddressMatch(requested, candidates) {
-  const target = normaliseAddress(requested);
+  const target = addressIdentity(requested);
   const scored = (candidates || []).map(candidate => {
     const address = candidate.address || candidate.displayAddress || '';
-    const normalised = normaliseAddress(address);
-    const exact = normalised === target;
-    const containment = normalised.includes(target) || target.includes(normalised);
+    const identity = addressIdentity(address);
+    const coreExact = Boolean(target.core) && identity.core === target.core;
+    const postcodeCompatible = target.postcode ? identity.postcode === target.postcode : true;
+    const exact = coreExact && postcodeCompatible;
+    const containment = identity.core.includes(target.core) || target.core.includes(identity.core);
+    const postcodeConflict = Boolean(target.postcode && identity.postcode && target.postcode !== identity.postcode);
     const providerScore = Number(candidate.relativeScore || 0);
-    return { candidate, exact, score: exact ? 10_000 : containment ? 5_000 + providerScore : providerScore };
+    const score = postcodeConflict ? providerScore - 5_000 : exact ? 10_000 : containment ? 5_000 + providerScore : providerScore;
+    return { candidate, exact, score };
   }).sort((a, b) => b.score - a.score);
   return scored[0] || null;
 }
