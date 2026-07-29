@@ -90,6 +90,8 @@ export function buildPricingResponse({ requestedAddress, propertyMatch, property
   const estimateAvailable = [lower, mid, upper].some(Number.isFinite);
   const listingAvailable = Boolean(listing);
   const status = estimateAvailable && listingAvailable ? 'complete' : estimateAvailable || listingAvailable || saleHistory.length ? 'partial' : 'unavailable';
+  const isDomain = provider === 'domain';
+  const providerLabel = isDomain ? 'Domain' : 'Deterministic test fixture';
 
   return {
     schemaVersion: PRICING_SCHEMA_VERSION,
@@ -124,22 +126,28 @@ export function buildPricingResponse({ requestedAddress, propertyMatch, property
     saleHistory,
     sources: [
       {
-        provider: 'Domain',
+        provider: providerLabel,
         kind: 'property_match',
-        authority: 'commercial_provider',
-        limitation: 'Domain property identifiers and records are subject to the licensed API plan and attribution requirements.',
+        authority: isDomain ? 'commercial_provider' : 'test_only',
+        limitation: isDomain
+          ? 'Domain property identifiers and records are subject to the licensed API plan and attribution requirements.'
+          : 'Fixture data exists only to validate the integration and must never be presented as live property evidence.',
       },
       {
-        provider: 'Domain',
+        provider: providerLabel,
         kind: 'market_estimate',
-        authority: 'commercial_avm',
-        limitation: 'An automated valuation estimate is not a professional valuation and may be unavailable or inaccurate for unusual properties.',
+        authority: isDomain ? 'commercial_avm' : 'test_only',
+        limitation: isDomain
+          ? 'An automated valuation estimate is not a professional valuation and may be unavailable or inaccurate for unusual properties.'
+          : 'Fixture values are synthetic and have no market meaning.',
       },
       {
-        provider: 'Domain',
+        provider: providerLabel,
         kind: 'listing_price',
-        authority: 'advertised_listing',
-        limitation: 'Display price is the agent or vendor marketing position, not evidence of market value or a guaranteed sale price.',
+        authority: isDomain ? 'advertised_listing' : 'test_only',
+        limitation: isDomain
+          ? 'Display price is the agent or vendor marketing position, not evidence of market value or a guaranteed sale price.'
+          : 'Fixture listing values are synthetic and have no market meaning.',
       },
     ],
   };
