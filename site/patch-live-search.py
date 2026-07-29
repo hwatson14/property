@@ -37,6 +37,15 @@ FILTER_BLOCK_NEW = '''      const pid = attrs.address_pid || attrs.ADDRESS_PID;
 PID_QUERY_OLD = "      where: `address_pid = '${escSql(pid)}'`,\n"
 PID_QUERY_NEW = "      where: `address_pid = ${Number(pid)}`,\n"
 
+LOADING_BLOCK_OLD = '''  function renderLoading() {
+    const hero = document.querySelector('[data-spa-page="report"] .report-hero');
+'''
+
+LOADING_BLOCK_NEW = '''  function renderLoading() {
+    window.PROPERTY_DATA = null;
+    const hero = document.querySelector('[data-spa-page="report"] .report-hero');
+'''
+
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
@@ -50,6 +59,7 @@ def main(path: Path) -> None:
     text = replace_once(text, TOKEN_BLOCK_OLD, TOKEN_BLOCK_NEW, "token parsing")
     text = replace_once(text, FILTER_BLOCK_OLD, FILTER_BLOCK_NEW, "Brisbane result filtering")
     text = replace_once(text, PID_QUERY_OLD, PID_QUERY_NEW, "numeric address PID query")
+    text = replace_once(text, LOADING_BLOCK_OLD, LOADING_BLOCK_NEW, "loading-state reset")
     path.write_text(text, encoding="utf-8")
 
 
