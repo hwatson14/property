@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the verified Brisbane address-search fix to the assembled browser bundle."""
+"""Apply verified Queensland address-source fixes to the assembled browser bundle."""
 from __future__ import annotations
 
 import sys
@@ -34,6 +34,9 @@ FILTER_BLOCK_NEW = '''      const pid = attrs.address_pid || attrs.ADDRESS_PID;
       if (!pid || !address || !/BRISBANE/i.test(localAuthority)) continue;
 '''
 
+PID_QUERY_OLD = "      where: `address_pid = '${escSql(pid)}'`,\n"
+PID_QUERY_NEW = "      where: `address_pid = ${Number(pid)}`,\n"
+
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
@@ -46,6 +49,7 @@ def main(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     text = replace_once(text, TOKEN_BLOCK_OLD, TOKEN_BLOCK_NEW, "token parsing")
     text = replace_once(text, FILTER_BLOCK_OLD, FILTER_BLOCK_NEW, "Brisbane result filtering")
+    text = replace_once(text, PID_QUERY_OLD, PID_QUERY_NEW, "numeric address PID query")
     path.write_text(text, encoding="utf-8")
 
 
