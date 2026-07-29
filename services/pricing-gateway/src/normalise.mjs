@@ -15,6 +15,13 @@ export function normaliseAddress(value) {
     .replace(/\s+/g, ' ');
 }
 
+function addressIdentity(value) {
+  const normalised = normaliseAddress(value);
+  const postcode = normalised.match(/\b\d{4}\b/)?.[0] || null;
+  const core = normalised.replace(/\b\d{4}\b/g, '').replace(/\s+/g, ' ').trim();
+  return { normalised, core, postcode };
+}
+
 function moneyNumber(token) {
   if (!token) return null;
   const clean = String(token).toLowerCase().replace(/a\$|\$|,/g, '').trim();
@@ -49,14 +56,31 @@ export function parseDisplayPrice(displayPrice) {
 }
 
 export function exactAddressMatch(requested, candidates) {
-  const target = normaliseAddress(requested);
-  const scored = (candidates || []).map(candidate => {
+  const target = addressIdentity(requested);
+  const entries = (candidates || []).map(candidate => {
     const address = candidate.address || candidate.displayAddress || '';
-    const normalised = normaliseAddress(address);
-    const exact = normalised === target;
-    const containment = normalised.includes(target) || target.includes(normalised);
+    const identity = addressIdentity(address);
+    const coreExact = Boolean(target.core) && identity.core === target.core;
+    const containment = Boolean(target.core) && (identity.core.includes(target.core) || target.core.includes(identity.core));
     const providerScore = Number(candidate.relativeScore || 0);
-    return { candidate, exact, score: exact ? 10_000 : containment ? 5_000 + providerScore : providerScore };
+    return { candidate, identity, coreExact, containment, providerScore };
+  });
+
+  if (!target.postcode) {
+    const coreMatches = entries.filter(entry => entry.coreExact);
+    const distinctPostcodes = new Set(coreMatches.map(entry => entry.identity.postcode).filter(Boolean));
+    if (coreMatches.length > 1 && distinctPostcodes.size > 1) {
+      const bestAmbiguous = [...coreMatches].sort((a, b) => b.providerScore - a.providerScore)[0];
+      return { candidate: bestAmbiguous.candidate, exact: false, ambiguous: true, score: bestAmbiguous.providerScore };
+    }
+  }
+
+  const scored = entries.map(entry => {
+    const postcodeCompatible = target.postcode ? entry.identity.postcode === target.postcode : true;
+    const exact = entry.coreExact && postcodeCompatible;
+    const postcodeConflict = Boolean(target.postcode && entry.identity.postcode && target.postcode !== entry.identity.postcode);
+    const score = postcodeConflict ? entry.providerScore - 5_000 : exact ? 10_000 + entry.providerScore : entry.containment ? 5_000 + entry.providerScore : entry.providerScore;
+    return { candidate: entry.candidate, exact, ambiguous: false, score };
   }).sort((a, b) => b.score - a.score);
   return scored[0] || null;
 }
