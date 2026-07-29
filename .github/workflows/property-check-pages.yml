@@ -39,8 +39,9 @@ jobs:
             cat site/index.parts/part-06.b64.part
           } | tr -d '\n\r' | base64 -d | gunzip > .pages-site/index.html
           cat site/live-property.parts/*.js.part > .pages-site/live-property.js
+          python3 site/patch-live-search.py .pages-site/live-property.js
           echo "cc3561dda4bda26473747f7f90a47f6145dd196166b6e8ff9442d0a0ab118faa  .pages-site/index.html" | sha256sum -c -
-          echo "b3e2c8e7c7dfc2d7003baf51f01b997be3c5fcb7715f64bc1f968832083119e8  .pages-site/live-property.js" | sha256sum -c -
+          echo "aee05012e43394d8795d4ee2c6362e669ac78f5c759ff010d1694b8049178829  .pages-site/live-property.js" | sha256sum -c -
           node --check .pages-site/live-property.js
           grep -Fq '<script src="./live-property.js"></script>' .pages-site/index.html
           touch .pages-site/.nojekyll
