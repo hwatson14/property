@@ -1,0 +1,64 @@
+name: Property Check live source smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/property-check-live-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Build live static site
+        run: |
+          rm -rf .pages-site
+          mkdir -p .pages-site
+          python3 site/build-live-site.py site/index.html .pages-site/index.html
+          cat site/live-property.parts/*.js.part > .pages-site/live-property.js
+          node --check .pages-site/live-property.js
+
+      - name: Start static site
+        run: |
+          python3 -m http.server 8000 --directory .pages-site > /tmp/property-check-http.log 2>&1 &
+          echo $! > /tmp/property-check-http.pid
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8000/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/property-check-http.log
+          exit 1
+
+      - name: Test live Queensland and Brisbane sources in browser
+        env:
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
+        run: node site/tests/live-smoke.mjs
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: property-check-live-browser-evidence
+          path: site/tests/artifacts
+          if-no-files-found: ignore
