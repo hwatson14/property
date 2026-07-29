@@ -117,7 +117,7 @@ async function runDesktop() {
   page.on('pageerror', error => failures.push(`desktop pageerror: ${error.message}`));
   page.on('console', message => { if (message.type() === 'error') failures.push(`desktop console: ${message.text()}`); });
   const annie = await testAddress(page, '28 Annie Street Hamilton QLD 4007', /28\s+Annie\s+Street/i, 'live-annie-desktop.png');
-  const william = await testAddress(page, '1 William Street Brisbane City QLD 4000', /^1\s+William\s+Street/i, 'live-william-desktop.png');
+  const william = await testAddress(page, '1 William Street Brisbane City QLD 4000', /\b1\s+William\s+Street/i, 'live-william-desktop.png');
   if (annie.propertyId === william.propertyId || annie.title === william.title) {
     throw new Error('Second address returned the first property report');
   }
