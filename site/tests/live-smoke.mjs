@@ -1,11 +1,14 @@
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-core';
 import fs from 'node:fs/promises';
 
 const baseUrl = process.env.PROPERTY_CHECK_BASE_URL || 'http://127.0.0.1:8000/';
 const outDir = process.env.PROPERTY_CHECK_ARTIFACT_DIR || 'site/tests/artifacts';
 await fs.mkdir(outDir, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome',
+});
 const failures = [];
 
 async function testAddress(page, query, expectedPattern, screenshotName) {
