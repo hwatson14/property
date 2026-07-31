@@ -1,12 +1,12 @@
 name: Verify deployed Property Check site
-# Release gate: LC-UX-v0.3.2
+# Release gate: LC-UX-v0.4.0
 
 on:
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/property-check-public-site-verify.yml"
-      - "site/tests/ux-v3-smoke.mjs"
+      - "site/tests/ux-v4-smoke.mjs"
       - "site/tests/comparison-smoke.mjs"
       - "site/tests/full-preview-smoke.mjs"
   workflow_dispatch:
@@ -39,26 +39,26 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for decision cockpit to be served
+      - name: Wait for clean decision interface to be served
         run: |
           for i in {1..120}; do
             if curl --fail --silent --location --max-time 15 \
-              https://hwatson14.github.io/property/decision-cockpit-v3-polish.js \
-              | grep -Fq 'LC-UX-v0.3.2'; then
-              echo "LemonCheck decision cockpit v3.2 is deployed."
+              https://hwatson14.github.io/property/decision-cockpit-v4.js \
+              | grep -Fq 'LC-UX-v0.4.0'; then
+              echo "LemonCheck clean UI v4 is deployed."
               exit 0
             fi
             sleep 2
           done
-          echo "LemonCheck decision cockpit v3.2 did not become available."
+          echo "LemonCheck clean UI v4 did not become available."
           exit 1
 
-      - name: Verify public UX v3 decision cockpit
+      - name: Verify public clean UI v4
         env:
           PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
           CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/ux-v3-smoke.mjs
+        run: node site/tests/ux-v4-smoke.mjs
 
       - name: Verify public comparison
         env:
