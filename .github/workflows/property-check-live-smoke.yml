@@ -35,19 +35,16 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Build compact static site
+      - name: Build decision cockpit site
         run: |
           python3 site/build-static.py .pages-site
           node --check .pages-site/live-property.js
-          node --check .pages-site/ux-simplification.js
           node --check .pages-site/full-report-preview.js
-          node --check .pages-site/ux-overhaul.js
-          node --check .pages-site/ux-overhaul-sync.js
-          node --check .pages-site/ux-overhaul-actions.js
-          grep -Fq 'LC-UX-v0.2.0' .pages-site/ux-overhaul.js
-          grep -Fq 'LC-FULL-PREVIEW-v0.1.0' .pages-site/full-report-preview.js
-          grep -Fq 'src="./ux-overhaul.js"' .pages-site/index.html
-          grep -Fq 'href="./ux-overhaul.css"' .pages-site/index.html
+          node --check .pages-site/decision-cockpit-v3.js
+          node --check .pages-site/decision-cockpit-v3-polish.js
+          grep -Fq 'LC-UX-v0.3.2' .pages-site/decision-cockpit-v3-polish.js
+          grep -Fq 'src="./decision-cockpit-v3-polish.js"' .pages-site/index.html
+          grep -Fq 'href="./decision-cockpit-v3-polish.css"' .pages-site/index.html
           ! grep -Fq 'leaflet' .pages-site/index.html
 
       - name: Start static site
@@ -61,18 +58,12 @@ jobs:
           cat /tmp/property-check-http.log
           exit 1
 
-      - name: Test live compact dashboard
+      - name: Test UX v3 decision cockpit
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
           CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/live-smoke.mjs
-
-      - name: Test answer-first reading order
-        env:
-          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
-          CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/ux-order-smoke.mjs
+        run: node site/tests/ux-v3-smoke.mjs
 
       - name: Test saved-property comparison
         env:

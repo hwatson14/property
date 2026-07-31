@@ -22,6 +22,8 @@ CSS_ASSETS = [
     "full-report-preview.css",
     "ux-overhaul.css",
     "ux-overhaul-detail.css",
+    "decision-cockpit-v3.css",
+    "decision-cockpit-v3-polish.css",
 ]
 JS_ASSETS = [
     "enhancements.js",
@@ -36,6 +38,9 @@ JS_ASSETS = [
     "ux-overhaul-sync.js",
     "ux-overhaul-polish.js",
     "ux-overhaul-actions.js",
+    "decision-cockpit-v3.js",
+    "decision-cockpit-v3-order.js",
+    "decision-cockpit-v3-polish.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 
