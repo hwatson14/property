@@ -38,6 +38,7 @@ JS_ASSETS = [
     "ux-overhaul-polish.js",
     "ux-overhaul-actions.js",
     "decision-cockpit-v3.js",
+    "decision-cockpit-v3-order.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 
