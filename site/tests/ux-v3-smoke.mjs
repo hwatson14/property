@@ -21,7 +21,7 @@ async function openReport(page, query, pattern) {
     const development = window.LEMONCHECK_ASSESSMENT?.development?.score;
     const renderedDevelopment = document.querySelector('[data-v3-lens="development"] strong')?.textContent?.trim() || '';
     return regex.test(window.PROPERTY_DATA?.canonical_address || '')
-      && document.querySelector('[data-ux-version="LC-UX-v0.3.1"]')
+      && document.querySelector('[data-ux-version="LC-UX-v0.3.2"]')
       && Number.isFinite(development)
       && /^\d+\/100$/.test(renderedDevelopment);
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
@@ -36,8 +36,12 @@ async function validate(page, pattern, screenshot, mobile = false) {
     const shellRect = shell?.getBoundingClientRect();
     const mapRect = map?.getBoundingClientRect();
     const nextSection = document.querySelector('.lc-v3-hide-next-section');
+    const visibleNewSearch = [...document.querySelectorAll('a,button')].filter((node) => {
+      const style = getComputedStyle(node);
+      return /new search/i.test(node.textContent || '') && style.display !== 'none' && style.visibility !== 'hidden' && node.getBoundingClientRect().height > 0;
+    }).length;
     return {
-      version: document.querySelector('[data-ux-version="LC-UX-v0.3.1"]')?.dataset.uxVersion || '',
+      version: document.querySelector('[data-ux-version="LC-UX-v0.3.2"]')?.dataset.uxVersion || '',
       address: document.querySelector('.lc-v3-property-bar h1')?.textContent?.trim() || '',
       verdict: document.querySelector('.lc-v3-answer h2')?.textContent?.trim() || '',
       boundary: document.querySelector('.lc-v3-boundary')?.textContent || '',
@@ -58,11 +62,12 @@ async function validate(page, pattern, screenshot, mobile = false) {
       visibleH1: [...document.querySelectorAll('h1')].filter((node) => getComputedStyle(node).display !== 'none' && node.getBoundingClientRect().height > 0).length,
       footerHidden: !document.querySelector('footer') || getComputedStyle(document.querySelector('footer')).display === 'none',
       nextSectionHidden: !nextSection || getComputedStyle(nextSection).display === 'none',
+      visibleNewSearch,
       lemon: window.LEMONCHECK_ASSESSMENT?.objective?.lemonScore,
       development: window.LEMONCHECK_ASSESSMENT?.development?.score,
     };
   });
-  if (state.version !== 'LC-UX-v0.3.1') throw new Error(`Wrong UX version: ${state.version}`);
+  if (state.version !== 'LC-UX-v0.3.2') throw new Error(`Wrong UX version: ${state.version}`);
   if (!pattern.test(state.address)) throw new Error(`Wrong address: ${state.address}`);
   if (!state.verdict || state.verdict.length > 90) throw new Error(`Bad verdict: ${state.verdict}`);
   if (!/mapped public data|mapped screening/i.test(state.boundary)) throw new Error('Evidence boundary missing');
@@ -72,8 +77,8 @@ async function validate(page, pattern, screenshot, mobile = false) {
   if (state.cta !== 'Personalise this check' || state.ctaHeight < 44) throw new Error('Primary CTA is invalid');
   if (!state.oldHidden || state.mapTop < state.shellBottom - 2) throw new Error(`Legacy UI or visual order is wrong: ${JSON.stringify({ oldHidden: state.oldHidden, shellBottom: state.shellBottom, mapTop: state.mapTop })}`);
   if (!mobile && state.shellBottom > state.viewportHeight + 8) throw new Error(`Decision cockpit misses first viewport: ${state.shellBottom}`);
-  if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development) || !state.footerHidden || !state.nextSectionHidden) {
-    throw new Error(`Accessibility, density or score state failed: ${JSON.stringify({ visibleH1: state.visibleH1, overflow: state.overflow, development: state.development, footerHidden: state.footerHidden, nextSectionHidden: state.nextSectionHidden })}`);
+  if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development) || !state.footerHidden || !state.nextSectionHidden || state.visibleNewSearch !== 1) {
+    throw new Error(`Accessibility, density or score state failed: ${JSON.stringify({ visibleH1: state.visibleH1, overflow: state.overflow, development: state.development, footerHidden: state.footerHidden, nextSectionHidden: state.nextSectionHidden, visibleNewSearch: state.visibleNewSearch })}`);
   }
   await page.screenshot({ path: `${outDir}/${screenshot}`, fullPage: true });
   return state;
