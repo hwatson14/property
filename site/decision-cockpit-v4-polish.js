@@ -55,7 +55,7 @@
   }
 
   function resetTransientState() {
-    document.documentElement.classList.remove('lc-v4-map-open', 'lc-v4-details-open');
+    document.documentElement.classList.remove('lc-v4-map-open', 'lc-v4-details-open', 'lc-v4-evidence-open');
     const original = document.querySelector('.lemoncheck-decision-section');
     if (original) {
       original.hidden = true;
@@ -76,12 +76,18 @@
     }, 80);
   }
 
-  document.addEventListener('click', (event) => {
-    if (event.target.closest('[data-v4-personalise]')) openPersonalisation();
-    if (event.target.closest('[data-v4-evidence]')) {
+  function openEvidence() {
+    document.documentElement.classList.add('lc-v4-evidence-open');
+    setTimeout(() => {
       const target = document.querySelector('.report-facts-section details, .report-facts-section');
       if (target?.tagName === 'DETAILS') target.open = true;
-    }
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  }
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-v4-personalise]')) openPersonalisation();
+    if (event.target.closest('[data-v4-evidence]')) openEvidence();
   }, true);
 
   window.addEventListener('hashchange', resetTransientState, true);
