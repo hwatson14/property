@@ -41,9 +41,10 @@ jobs:
           node --check .pages-site/live-property.js
           node --check .pages-site/full-report-preview.js
           node --check .pages-site/decision-cockpit-v3.js
-          grep -Fq 'LC-UX-v0.3.0' .pages-site/decision-cockpit-v3.js
-          grep -Fq 'src="./decision-cockpit-v3.js"' .pages-site/index.html
-          grep -Fq 'href="./decision-cockpit-v3.css"' .pages-site/index.html
+          node --check .pages-site/decision-cockpit-v3-polish.js
+          grep -Fq 'LC-UX-v0.3.1' .pages-site/decision-cockpit-v3-polish.js
+          grep -Fq 'src="./decision-cockpit-v3-polish.js"' .pages-site/index.html
+          grep -Fq 'href="./decision-cockpit-v3-polish.css"' .pages-site/index.html
           ! grep -Fq 'leaflet' .pages-site/index.html
 
       - name: Start static site
