@@ -20,6 +20,8 @@ CSS_ASSETS = [
     "shortlist.css",
     "ux-simplification.css",
     "full-report-preview.css",
+    "ux-overhaul.css",
+    "ux-overhaul-detail.css",
 ]
 JS_ASSETS = [
     "enhancements.js",
@@ -30,6 +32,10 @@ JS_ASSETS = [
     "shortlist.js",
     "ux-simplification.js",
     "full-report-preview.js",
+    "ux-overhaul.js",
+    "ux-overhaul-sync.js",
+    "ux-overhaul-polish.js",
+    "ux-overhaul-actions.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 

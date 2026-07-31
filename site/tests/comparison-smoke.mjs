@@ -22,24 +22,12 @@ async function openProperty(query, pattern) {
   await page.waitForFunction(({ source, flags }) => {
     const regex = new RegExp(source, flags);
     return regex.test(window.PROPERTY_DATA?.canonical_address || '')
+      && regex.test(document.querySelector('.lc-v2-property-title h1')?.textContent || '')
       && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1'
-      && document.querySelector('.lc-simple-summary')?.dataset.uxVersion === 'LC-UX-v0.1.0';
+      && document.querySelector('[data-ux-version="LC-UX-v0.2.0"]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
 
-  await page.locator('.lc-simple-details > summary').click();
-  const form = page.locator('.lc-profile-form');
-  await form.locator('[name="goal"]').selectOption('live_in');
-  await form.locator('[name="riskTolerance"]').selectOption('balanced');
-  await form.locator('[name="price"]').fill('900000');
-  await form.locator('[name="costs"]').fill('25000');
-  await form.locator('button[type="submit"]').click();
-  await page.waitForFunction(() => Number.isFinite(window.LEMONCHECK_ASSESSMENT?.fit?.score)
-    && window.LEMONCHECK_ASSESSMENT?.deal?.score === null
-    && document.querySelector('.lc-simple-summary')?.dataset.uxVersion === 'LC-UX-v0.1.0', null, { timeout: 15000 });
-
-  const save = page.locator('[data-save-property]:visible');
-  await save.waitFor({ state: 'visible', timeout: 10000 });
-  await save.click();
+  await page.locator('[data-v2-save]').click();
   await page.waitForFunction(() => {
     const items = JSON.parse(localStorage.getItem('lemoncheck-shortlist-v1') || '[]');
     return items.some(item => String(item.propertyId) === String(window.PROPERTY_DATA?.property_id));
@@ -62,8 +50,7 @@ try {
   if (annie.propertyId === william.propertyId) throw new Error('Second saved property reused first property ID');
   if (annie.deal !== null || william.deal !== null) throw new Error('Comparison should preserve pending Deal Scores without automated pricing');
 
-  const compare = page.locator('[data-open-comparison]:visible');
-  await compare.click();
+  await page.locator('[data-v2-compare]').click();
   const dialog = page.locator('#lemoncheck-compare-dialog[open]');
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   const state = await page.evaluate(() => {
