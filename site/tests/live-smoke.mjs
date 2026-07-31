@@ -95,19 +95,19 @@ try {
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   desktop.on('pageerror', error => failures.push(`desktop pageerror: ${error.message}`));
   desktop.on('console', message => { if (message.type() === 'error') failures.push(`desktop console: ${message.text()}`); });
-  const fryar = await validateReport(desktop, '4 Fryar Court Keperra', /4\s+Fryar\s+Court/i, 'live-fryar-desktop.png');
   const annie = await validateReport(desktop, '28 Annie Street Hamilton QLD 4007', /28\s+Annie\s+Street/i, 'live-annie-desktop.png');
-  if (fryar.propertyId === annie.propertyId) throw new Error('Second address reused first property');
+  const william = await validateReport(desktop, '1 William Street Brisbane City QLD 4000', /\b1\s+William\s+Street/i, 'live-william-desktop.png');
+  if (annie.propertyId === william.propertyId) throw new Error('Second address reused first property');
   await desktop.close();
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
   mobile.on('pageerror', error => failures.push(`mobile pageerror: ${error.message}`));
   mobile.on('console', message => { if (message.type() === 'error') failures.push(`mobile console: ${message.text()}`); });
-  const mobileResult = await validateReport(mobile, '4 Fryar Court Keperra', /4\s+Fryar\s+Court/i, 'live-fryar-mobile.png');
+  const mobileResult = await validateReport(mobile, '28 Annie Street Hamilton QLD 4007', /28\s+Annie\s+Street/i, 'live-annie-mobile.png');
   await mobile.close();
 
   if (failures.length) throw new Error(failures.join('\n'));
-  console.log(JSON.stringify({ ok: true, baseUrl, desktop: { fryar, annie }, mobile: mobileResult }, null, 2));
+  console.log(JSON.stringify({ ok: true, baseUrl, desktop: { annie, william }, mobile: mobileResult }, null, 2));
 } catch (error) {
   console.error(error.stack || error.message || String(error));
   process.exitCode = 1;
