@@ -40,9 +40,11 @@ jobs:
           python3 site/build-static.py .pages-site
           node --check .pages-site/live-property.js
           node --check .pages-site/ux-simplification.js
+          node --check .pages-site/full-report-preview.js
           grep -Fq 'LC-UX-v0.1.0' .pages-site/ux-simplification.js
-          grep -Fq 'src="./ux-simplification.js"' .pages-site/index.html
-          grep -Fq 'href="./ux-simplification.css"' .pages-site/index.html
+          grep -Fq 'LC-FULL-PREVIEW-v0.1.0' .pages-site/full-report-preview.js
+          grep -Fq 'src="./full-report-preview.js"' .pages-site/index.html
+          grep -Fq 'href="./full-report-preview.css"' .pages-site/index.html
           ! grep -Fq 'leaflet' .pages-site/index.html
 
       - name: Start static site
@@ -69,6 +71,13 @@ jobs:
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/comparison-smoke.mjs
+
+      - name: Test full-product preview
+        env:
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/full-preview-smoke.mjs
 
       - name: Upload browser evidence
         if: always()
