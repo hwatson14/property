@@ -35,16 +35,17 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Build simplified static site
+      - name: Build compact static site
         run: |
           python3 site/build-static.py .pages-site
           node --check .pages-site/live-property.js
           node --check .pages-site/ux-simplification.js
           node --check .pages-site/full-report-preview.js
-          grep -Fq 'LC-UX-v0.1.0' .pages-site/ux-simplification.js
+          node --check .pages-site/ux-overhaul.js
+          grep -Fq 'LC-UX-v0.2.0' .pages-site/ux-overhaul.js
           grep -Fq 'LC-FULL-PREVIEW-v0.1.0' .pages-site/full-report-preview.js
-          grep -Fq 'src="./full-report-preview.js"' .pages-site/index.html
-          grep -Fq 'href="./full-report-preview.css"' .pages-site/index.html
+          grep -Fq 'src="./ux-overhaul.js"' .pages-site/index.html
+          grep -Fq 'href="./ux-overhaul.css"' .pages-site/index.html
           ! grep -Fq 'leaflet' .pages-site/index.html
 
       - name: Start static site
@@ -58,7 +59,7 @@ jobs:
           cat /tmp/property-check-http.log
           exit 1
 
-      - name: Test live sources and simplified report
+      - name: Test live compact dashboard
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
