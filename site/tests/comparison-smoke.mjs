@@ -26,7 +26,7 @@ async function openProperty(query, pattern) {
       && document.querySelector('.lc-simple-summary')?.dataset.uxVersion === 'LC-UX-v0.1.0';
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
 
-  await page.locator('.lc-simple-details summary').click();
+  await page.locator('.lc-simple-details > summary').click();
   const form = page.locator('.lc-profile-form');
   await form.locator('[name="goal"]').selectOption('live_in');
   await form.locator('[name="riskTolerance"]').selectOption('balanced');
