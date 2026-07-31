@@ -42,7 +42,7 @@ jobs:
           node --check .pages-site/full-report-preview.js
           node --check .pages-site/decision-cockpit-v3.js
           node --check .pages-site/decision-cockpit-v3-polish.js
-          grep -Fq 'LC-UX-v0.3.1' .pages-site/decision-cockpit-v3-polish.js
+          grep -Fq 'LC-UX-v0.3.2' .pages-site/decision-cockpit-v3-polish.js
           grep -Fq 'src="./decision-cockpit-v3-polish.js"' .pages-site/index.html
           grep -Fq 'href="./decision-cockpit-v3-polish.css"' .pages-site/index.html
           ! grep -Fq 'leaflet' .pages-site/index.html
