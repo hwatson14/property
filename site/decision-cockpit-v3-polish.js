@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "LC-UX-v0.3.1";
+  const VERSION = "LC-UX-v0.3.2";
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   const GAP_COPY = {
     "Building and pest evidence": ["Building condition is unchecked", "Structural, moisture, termite and maintenance costs remain unknown.", "Order a current building and pest inspection."],
@@ -28,14 +28,19 @@
 
   function hideRedundantEnding() {
     const leaf = [...document.querySelectorAll('body *')].find((node) => node.children.length === 0 && /Check another Brisbane address\.?/i.test(node.textContent || ''));
+    if (!leaf) return;
+    const section = leaf.closest('section');
+    if (section) {
+      section.classList.add('lc-v3-hide-next-section');
+      return;
+    }
     let node = leaf;
+    let candidate = null;
     while (node && node !== document.body) {
-      if (/Check another Brisbane address/i.test(node.textContent || '') && node.querySelector('a,button')) {
-        node.classList.add('lc-v3-hide-next-section');
-        break;
-      }
+      if (/Check another Brisbane address/i.test(node.textContent || '') && node.querySelector('a,button')) candidate = node;
       node = node.parentElement;
     }
+    candidate?.classList.add('lc-v3-hide-next-section');
   }
 
   function patch() {
@@ -46,6 +51,7 @@
 
     shell.querySelector('[data-v3-lens="lemon"]')?.remove();
     shell.querySelector('[data-v3-lens="confidence"]')?.remove();
+    shell.querySelector('[data-v3-new]')?.remove();
     replaceThirdFindingWithGap(shell);
     replaceBrand();
     hideRedundantEnding();
