@@ -34,6 +34,7 @@ JS_ASSETS = [
     "full-report-preview.js",
     "ux-overhaul.js",
     "ux-overhaul-sync.js",
+    "ux-overhaul-polish.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 
