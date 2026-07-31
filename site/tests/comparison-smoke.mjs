@@ -55,7 +55,8 @@ async function openProperty(query, pattern) {
 }
 
 try {
-  localStorage.clear();
+  await page.goto(`${baseUrl}#/home`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.evaluate(() => localStorage.clear());
   const annie = await openProperty('28 Annie Street Hamilton QLD 4007', /28\s+Annie\s+Street/i);
   const william = await openProperty('1 William Street Brisbane City QLD 4000', /\b1\s+William\s+Street/i);
   if (annie.propertyId === william.propertyId) throw new Error('Second saved property reused first property ID');
