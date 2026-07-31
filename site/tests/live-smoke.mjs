@@ -70,7 +70,7 @@ async function validateReport(page, query, pattern, screenshotName) {
   if (!assessment.confidence?.gaps?.includes('Building and pest evidence')) throw new Error('Assessment gaps missing');
 
   const detail = page.locator('.lc-simple-details');
-  await detail.locator('summary').click();
+  await detail.locator(':scope > summary').click();
   const form = page.locator('.lc-profile-form');
   await form.locator('[name="goal"]').selectOption('live_in');
   await form.locator('[name="riskTolerance"]').selectOption('balanced');
