@@ -1,5 +1,5 @@
 name: Verify deployed Property Check site
-# Release gate: LC-UX-v0.1.0
+# Release gate: LC-FULL-PREVIEW-v0.1.0
 
 on:
   pull_request:
@@ -8,6 +8,7 @@ on:
       - ".github/workflows/property-check-public-site-verify.yml"
       - "site/tests/live-smoke.mjs"
       - "site/tests/comparison-smoke.mjs"
+      - "site/tests/full-preview-smoke.mjs"
   workflow_dispatch:
 
 permissions:
@@ -38,18 +39,18 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for simplified UX to be served
+      - name: Wait for full report preview to be served
         run: |
           for i in {1..120}; do
             if curl --fail --silent --location --max-time 15 \
-              https://hwatson14.github.io/property/ux-simplification.js \
-              | grep -Fq 'LC-UX-v0.1.0'; then
-              echo "Simplified UX is deployed."
+              https://hwatson14.github.io/property/full-report-preview.js \
+              | grep -Fq 'LC-FULL-PREVIEW-v0.1.0'; then
+              echo "Full report preview is deployed."
               exit 0
             fi
             sleep 2
           done
-          echo "Simplified UX did not become available."
+          echo "Full report preview did not become available."
           exit 1
 
       - name: Verify public live report
@@ -65,6 +66,13 @@ jobs:
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/comparison-smoke.mjs
+
+      - name: Verify public full report preview
+        env:
+          PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/full-preview-smoke.mjs
 
       - name: Upload public-site browser evidence
         if: always()
