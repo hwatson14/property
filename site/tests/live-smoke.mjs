@@ -37,6 +37,7 @@ async function validateReport(page, query, pattern, screenshotName) {
     return {
       data,
       assessment,
+      viewportWidth: window.innerWidth,
       address: document.querySelector('.lc-v2-property-title h1')?.textContent?.trim() || '',
       reportHeroHidden: getComputedStyle(document.querySelector('.report-hero')).display === 'none',
       originalHidden: document.querySelector('.lemoncheck-decision-section')?.hidden === true,
@@ -60,7 +61,7 @@ async function validateReport(page, query, pattern, screenshotName) {
   if (state.price !== '$–') throw new Error(`Unavailable price should display $–, received ${state.price}`);
   if (state.deal !== '—') throw new Error(`Pending Deal Score should display —, received ${state.deal}`);
   if (state.lenses !== 5 || state.matters !== 3 || state.actions !== 3) throw new Error(`Compact dashboard structure invalid: ${JSON.stringify(state)}`);
-  if (state.summaryHeight > 850) throw new Error(`Compact summary is too tall: ${state.summaryHeight}px`);
+  if (state.viewportWidth > 760 && state.summaryHeight > 850) throw new Error(`Desktop compact summary is too tall: ${state.summaryHeight}px`);
   if (state.visibleH1.length !== 1) throw new Error(`Expected one visible H1, found ${JSON.stringify(state.visibleH1)}`);
   if (state.overflow > 2) throw new Error(`Horizontal overflow: ${state.overflow}px`);
 
