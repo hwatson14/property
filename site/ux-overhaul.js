@@ -3,7 +3,11 @@
 
   const VERSION = "LC-UX-v0.2.0";
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
-  const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+  const finite = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
 
   function scoreBand(value) {
     if (!Number.isFinite(value)) return { label: "Pending", className: "pending" };
@@ -64,7 +68,7 @@
 
   function render(data, assessment) {
     const original = document.querySelector(".lemoncheck-decision-section");
-    if (!original || !data?.property_id || !assessment?.objective) return;
+    if (!original || !data?.property_id || !data?.canonical_address || !assessment?.objective) return;
 
     document.querySelector(".report-hero")?.classList.add("lc-v2-hide-report-hero");
 
@@ -87,7 +91,7 @@
 
     section.innerHTML = `<div class="container lc-v2-shell" data-ux-version="${VERSION}">
       <header class="lc-v2-property-head">
-        <div class="lc-v2-property-title"><span>Property assessment</span><h1>${escapeHtml(data.canonical_address || "Property")}</h1><p>${parcelCount || 1} parcel${parcelCount === 1 ? "" : "s"} · ${escapeHtml(area)} · ${escapeHtml(zone)}</p></div>
+        <div class="lc-v2-property-title"><span>Property assessment</span><h1>${escapeHtml(data.canonical_address)}</h1><p>${parcelCount || 1} parcel${parcelCount === 1 ? "" : "s"} · ${escapeHtml(area)} · ${escapeHtml(zone)}</p></div>
         <div class="lc-v2-head-actions"><button type="button" data-v2-save>Save</button><button type="button" data-v2-compare>Compare</button></div>
       </header>
 
@@ -141,7 +145,7 @@
   function apply() {
     const data = window.PROPERTY_DATA;
     const assessment = window.LEMONCHECK_ASSESSMENT;
-    if (data?.property_id && assessment?.objective) render(data, assessment);
+    if (data?.property_id && data?.canonical_address && assessment?.objective) render(data, assessment);
   }
 
   window.addEventListener("lemoncheck:governance-ready", apply);
