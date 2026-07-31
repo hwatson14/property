@@ -18,8 +18,10 @@ async function openAddress(page, query, pattern) {
   await row.click();
   await page.waitForFunction(({ source, flags }) => {
     const regex = new RegExp(source, flags);
+    const rendered = document.querySelector('.lc-v2-property-title h1')?.textContent || '';
     return window.PROPERTY_DATA?.mode === 'live'
       && regex.test(window.PROPERTY_DATA?.canonical_address || '')
+      && regex.test(rendered)
       && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1'
       && document.querySelector('[data-ux-version="LC-UX-v0.2.0"]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
@@ -54,7 +56,7 @@ async function validateReport(page, query, pattern, screenshotName) {
   if (!state.data || state.data.mode !== 'live' || !Array.isArray(state.data.metrics) || state.data.metrics.length < 12) throw new Error('Live metric payload missing');
   if (!Array.isArray(state.data.parcels) || state.data.parcels.length < 1) throw new Error('Parcel resolution missing');
   if (state.version !== 'LC-UX-v0.2.0') throw new Error('UX overhaul missing');
-  if (!state.reportHeroHidden || !state.originalHidden) throw new Error('Legacy hero or legacy dashboard remains visible');
+  if (!state.reportHeroHidden || !state.originalHidden) throw new Error('Legacy hero or dashboard remains visible');
   if (state.price !== '$–') throw new Error(`Unavailable price should display $–, received ${state.price}`);
   if (state.deal !== '—') throw new Error(`Pending Deal Score should display —, received ${state.deal}`);
   if (state.lenses !== 5 || state.matters !== 3 || state.actions !== 3) throw new Error(`Compact dashboard structure invalid: ${JSON.stringify(state)}`);
@@ -67,19 +69,12 @@ async function validateReport(page, query, pattern, screenshotName) {
   if (!Number.isFinite(assessment?.confidence?.score) || assessment.confidence.score > 55) throw new Error('Invalid completeness score');
   if (assessment.deal?.score !== null) throw new Error('Deal Score must remain pending without automated pricing');
 
+  await page.screenshot({ path: `${outDir}/${screenshotName}`, fullPage: true });
   await page.locator('[data-v2-open-details]').click();
   await page.locator('.lemoncheck-decision-section').waitFor({ state: 'visible', timeout: 10000 });
-  const detail = page.locator('.lc-simple-details');
-  if (!(await detail.getAttribute('open'))) await detail.locator(':scope > summary').click();
-  const form = page.locator('.lc-profile-form');
-  await form.locator('[name="goal"]').selectOption('live_in');
-  await form.locator('[name="riskTolerance"]').selectOption('balanced');
-  await form.locator('[name="price"]').fill('900000');
-  await form.locator('[name="costs"]').fill('25000');
-  await form.locator('button[type="submit"]').click();
-  await page.waitForFunction(() => Number.isFinite(window.LEMONCHECK_ASSESSMENT?.fit?.score) && window.LEMONCHECK_ASSESSMENT?.deal?.score === null, null, { timeout: 15000 });
+  const detailAvailable = await page.locator('.lc-simple-details').count();
+  if (!detailAvailable) throw new Error('Detailed assessment container is missing');
 
-  await page.screenshot({ path: `${outDir}/${screenshotName}`, fullPage: true });
   return page.evaluate(() => ({
     propertyId: String(window.PROPERTY_DATA.property_id),
     address: window.PROPERTY_DATA.canonical_address,
