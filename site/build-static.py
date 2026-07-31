@@ -21,6 +21,7 @@ CSS_ASSETS = [
     "ux-simplification.css",
     "full-report-preview.css",
     "ux-overhaul.css",
+    "ux-overhaul-detail.css",
 ]
 JS_ASSETS = [
     "enhancements.js",
