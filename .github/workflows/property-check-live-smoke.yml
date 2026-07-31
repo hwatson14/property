@@ -42,6 +42,8 @@ jobs:
           node --check .pages-site/ux-simplification.js
           node --check .pages-site/full-report-preview.js
           node --check .pages-site/ux-overhaul.js
+          node --check .pages-site/ux-overhaul-sync.js
+          node --check .pages-site/ux-overhaul-actions.js
           grep -Fq 'LC-UX-v0.2.0' .pages-site/ux-overhaul.js
           grep -Fq 'LC-FULL-PREVIEW-v0.1.0' .pages-site/full-report-preview.js
           grep -Fq 'src="./ux-overhaul.js"' .pages-site/index.html
@@ -65,6 +67,12 @@ jobs:
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
+
+      - name: Test answer-first reading order
+        env:
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/ux-order-smoke.mjs
 
       - name: Test saved-property comparison
         env:
