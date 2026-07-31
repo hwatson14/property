@@ -4,6 +4,7 @@
   let lastPropertyId = "";
   let lastAddress = "";
   let lastSignature = "";
+  let repairingOrder = false;
 
   function scoreValue(value) {
     return value === null || value === undefined ? "pending" : String(value);
@@ -41,9 +42,23 @@
   }
 
   function enforceReadingOrder() {
+    if (repairingOrder) return;
     const summary = document.querySelector(".lc-v2-summary");
     const map = document.querySelector(".report-overview-section");
-    if (summary && map && summary.nextElementSibling !== map) summary.insertAdjacentElement("afterend", map);
+    if (!summary || !map || !map.parentElement) return;
+    const parent = map.parentElement;
+    const summaryTop = summary.getBoundingClientRect().top + window.scrollY;
+    const mapTop = map.getBoundingClientRect().top + window.scrollY;
+    if (summary.parentElement !== parent || summary.nextElementSibling !== map || summaryTop > mapTop) {
+      repairingOrder = true;
+      parent.insertBefore(summary, map);
+      requestAnimationFrame(() => {
+        repairingOrder = false;
+        document.documentElement.classList.add("lc-v2-reading-order-ready");
+      });
+    } else {
+      document.documentElement.classList.add("lc-v2-reading-order-ready");
+    }
   }
 
   function synchronise() {
@@ -69,10 +84,17 @@
     }, 0);
   }
 
+  const observer = new MutationObserver(() => {
+    if (!repairingOrder) requestAnimationFrame(enforceReadingOrder);
+  });
+  if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener("DOMContentLoaded", () => observer.observe(document.body, { childList: true, subtree: true }), { once: true });
+
   window.addEventListener("hashchange", () => {
     lastPropertyId = "";
     lastAddress = "";
     lastSignature = "";
+    document.documentElement.classList.remove("lc-v2-reading-order-ready");
     setTimeout(synchronise, 50);
   });
   window.addEventListener("lemoncheck:assessment-ready", () => setTimeout(synchronise, 0));
