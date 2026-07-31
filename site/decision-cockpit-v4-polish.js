@@ -2,6 +2,7 @@
   "use strict";
 
   const toolIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6.5 3-3a4 4 0 0 1-5 5l-7.8 7.8a2 2 0 1 0 2.8 2.8l7.8-7.8a4 4 0 0 1 5-5l-3 3"/></svg>';
+  let currentPropertyId = '';
 
   function ensureEvidenceGap() {
     const shell = document.querySelector('[data-ux-version="LC-UX-v0.4.0"]');
@@ -38,6 +39,30 @@
       <button type="button" data-v4-evidence aria-label="View evidence for ${content.title}">›</button>`;
   }
 
+  function hideRedundantToolbar() {
+    const candidates = [...document.querySelectorAll('nav,section,div')].filter((node) => {
+      if (node.closest('.lc-v4-shell')) return false;
+      const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+      return text.includes('Home')
+        && text.includes('Property report')
+        && text.includes('Share')
+        && text.includes('Print')
+        && text.includes('New search')
+        && node.childElementCount < 24;
+    });
+    candidates.sort((a, b) => a.textContent.length - b.textContent.length);
+    candidates[0]?.classList.add('lc-v4-redundant-toolbar');
+  }
+
+  function resetTransientState() {
+    document.documentElement.classList.remove('lc-v4-map-open', 'lc-v4-details-open');
+    const original = document.querySelector('.lemoncheck-decision-section');
+    if (original) {
+      original.hidden = true;
+      original.classList.remove('is-open');
+    }
+  }
+
   function openPersonalisation() {
     document.documentElement.classList.add('lc-v4-details-open');
     const original = document.querySelector('.lemoncheck-decision-section');
@@ -59,6 +84,20 @@
     }
   }, true);
 
-  window.addEventListener('lemoncheck:ux-v4-ready', () => setTimeout(ensureEvidenceGap, 0));
-  setInterval(ensureEvidenceGap, 500);
+  window.addEventListener('hashchange', resetTransientState, true);
+  window.addEventListener('lemoncheck:ux-v4-ready', (event) => {
+    const propertyId = String(event.detail?.propertyId || '');
+    if (propertyId && propertyId !== currentPropertyId) {
+      currentPropertyId = propertyId;
+      resetTransientState();
+    }
+    setTimeout(() => {
+      ensureEvidenceGap();
+      hideRedundantToolbar();
+    }, 0);
+  });
+  setInterval(() => {
+    ensureEvidenceGap();
+    hideRedundantToolbar();
+  }, 500);
 })();
