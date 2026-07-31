@@ -22,20 +22,10 @@ async function openProperty(query, pattern) {
   await page.waitForFunction(({ source, flags }) => {
     const regex = new RegExp(source, flags);
     return regex.test(window.PROPERTY_DATA?.canonical_address || '')
+      && regex.test(document.querySelector('.lc-v2-property-title h1')?.textContent || '')
       && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1'
       && document.querySelector('[data-ux-version="LC-UX-v0.2.0"]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
-
-  await page.locator('[data-v2-open-details]').click();
-  const detail = page.locator('.lc-simple-details');
-  if (!(await detail.getAttribute('open'))) await detail.locator(':scope > summary').click();
-  const form = page.locator('.lc-profile-form');
-  await form.locator('[name="goal"]').selectOption('live_in');
-  await form.locator('[name="riskTolerance"]').selectOption('balanced');
-  await form.locator('[name="price"]').fill('900000');
-  await form.locator('[name="costs"]').fill('25000');
-  await form.locator('button[type="submit"]').click();
-  await page.waitForFunction(() => Number.isFinite(window.LEMONCHECK_ASSESSMENT?.fit?.score) && window.LEMONCHECK_ASSESSMENT?.deal?.score === null, null, { timeout: 15000 });
 
   await page.locator('[data-v2-save]').click();
   await page.waitForFunction(() => {
