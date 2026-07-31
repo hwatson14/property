@@ -1,4 +1,5 @@
 name: Verify deployed Property Check site
+# Release gate: LC-UX-v0.1.0
 
 on:
   pull_request:
