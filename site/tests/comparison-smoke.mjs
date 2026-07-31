@@ -24,7 +24,7 @@ async function openProperty(query, pattern) {
     return regex.test(window.PROPERTY_DATA?.canonical_address || '')
       && regex.test(document.querySelector('.lc-v3-property-bar h1')?.textContent || '')
       && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1'
-      && document.querySelector('[data-ux-version="LC-UX-v0.3.0"]');
+      && document.querySelector('[data-ux-version="LC-UX-v0.3.2"]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
 
   await page.locator('[data-v3-save]:visible').click();
