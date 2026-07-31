@@ -27,9 +27,7 @@ async function openReport(page, query, pattern) {
 
 async function validate(page, pattern, screenshotName, mobile = false) {
   const state = await page.evaluate(() => {
-    const shell = document.querySelector('.lc-v4-shell');
     const report = document.querySelector('.lc-v4-report-card');
-    const findings = document.querySelector('.lc-v4-findings-card');
     const lenses = document.querySelector('.lc-v4-lenses');
     const secondary = document.querySelector('.lc-v4-secondary-grid');
     const map = document.querySelector('.report-overview-section');
@@ -52,7 +50,7 @@ async function validate(page, pattern, screenshotName, mobile = false) {
       primaryCtaHeight: document.querySelector('[data-v4-personalise]')?.getBoundingClientRect().height || 0,
       v3Hidden: document.querySelector('.lc-v3-shell') ? getComputedStyle(document.querySelector('.lc-v3-shell')).display === 'none' : true,
       v2Hidden: document.querySelector('.lc-v2-summary') ? getComputedStyle(document.querySelector('.lc-v2-summary')).display === 'none' : true,
-      mapHidden: map ? getComputedStyle(map).display === 'none' : false,
+      mapHidden: map ? getComputedStyle(map).display === 'none' : true,
       reportTop: report?.getBoundingClientRect().top || 0,
       lensesBottom: lenses?.getBoundingClientRect().bottom || 0,
       secondaryTop: secondary?.getBoundingClientRect().top || 0,
@@ -74,7 +72,7 @@ async function validate(page, pattern, screenshotName, mobile = false) {
   if (state.findingActions.some((text) => !/^Next:/i.test(text))) throw new Error('A finding is missing its direct next action');
   if (state.lenses !== 3 || state.secondaryCards !== 2 || state.parcelSvg < 1) throw new Error('Supporting hierarchy is incomplete');
   if (!/Personalise this check/i.test(state.primaryCta) || state.primaryCtaHeight < 44) throw new Error('Primary CTA failed');
-  if (!state.v3Hidden || !state.v2Hidden || !state.mapHidden) throw new Error('Legacy UI or full map is visible initially');
+  if (!state.v3Hidden || !state.v2Hidden || !state.mapHidden) throw new Error(`Legacy UI or full map is visible initially: ${JSON.stringify(state)}`);
   if (!mobile && (state.lensesBottom > state.viewportHeight + 8 || state.secondaryTop > state.viewportHeight + 80)) throw new Error(`First viewport is too tall: ${JSON.stringify(state)}`);
   if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development)) throw new Error('Accessibility, overflow or score state failed');
 
