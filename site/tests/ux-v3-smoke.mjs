@@ -18,9 +18,14 @@ async function openReport(page, query, pattern) {
   await row.click();
   await page.waitForFunction(({ source, flags }) => {
     const regex = new RegExp(source, flags);
-    return regex.test(window.PROPERTY_DATA?.canonical_address || '') && document.querySelector('[data-ux-version="LC-UX-v0.3.0"]');
+    const development = window.LEMONCHECK_ASSESSMENT?.development?.score;
+    const renderedDevelopment = document.querySelector('[data-v3-lens="development"] strong')?.textContent?.trim() || '';
+    return regex.test(window.PROPERTY_DATA?.canonical_address || '')
+      && document.querySelector('[data-ux-version="LC-UX-v0.3.0"]')
+      && Number.isFinite(development)
+      && /^\d+\/100$/.test(renderedDevelopment);
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(250);
 }
 
 async function validate(page, pattern, screenshot, mobile = false) {
@@ -61,7 +66,9 @@ async function validate(page, pattern, screenshot, mobile = false) {
   if (state.cta !== 'Personalise this check' || state.ctaHeight < 44) throw new Error('Primary CTA is invalid');
   if (!state.oldHidden || state.mapTop < state.shellBottom - 2) throw new Error(`Legacy UI or visual order is wrong: ${JSON.stringify({ oldHidden: state.oldHidden, shellBottom: state.shellBottom, mapTop: state.mapTop })}`);
   if (!mobile && state.shellBottom > state.viewportHeight + 8) throw new Error(`Decision cockpit misses first viewport: ${state.shellBottom}`);
-  if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development)) throw new Error('Accessibility, overflow or score state failed');
+  if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development)) {
+    throw new Error(`Accessibility, overflow or score state failed: ${JSON.stringify({ visibleH1: state.visibleH1, overflow: state.overflow, development: state.development })}`);
+  }
   await page.screenshot({ path: `${outDir}/${screenshot}`, fullPage: true });
   return state;
 }
