@@ -20,12 +20,14 @@ async function openReport(page, query, pattern) {
     const regex = new RegExp(source, flags);
     return regex.test(window.PROPERTY_DATA?.canonical_address || '') && document.querySelector('[data-ux-version="LC-UX-v0.3.0"]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
+  await page.waitForTimeout(400);
 }
 
 async function validate(page, pattern, screenshot, mobile = false) {
   const state = await page.evaluate(() => {
     const shell = document.querySelector('.lc-v3-shell');
     const map = document.querySelector('.report-overview-section');
+    const old = document.querySelector('.lc-v2-summary');
     const shellRect = shell?.getBoundingClientRect();
     const mapRect = map?.getBoundingClientRect();
     return {
@@ -40,8 +42,10 @@ async function validate(page, pattern, screenshot, mobile = false) {
       nextLabels: [...document.querySelectorAll('.lc-v3-finding small')].map((node) => node.textContent.trim()),
       cta: document.querySelector('[data-v3-personalise]')?.textContent?.trim() || '',
       ctaHeight: document.querySelector('[data-v3-personalise]')?.getBoundingClientRect().height || 0,
-      oldHidden: getComputedStyle(document.querySelector('.lc-v2-summary')).display === 'none',
+      oldHidden: old ? getComputedStyle(old).display === 'none' : true,
+      oldDisplay: old ? getComputedStyle(old).display : 'missing',
       mapAfter: shell?.nextElementSibling === map,
+      nextClass: shell?.nextElementSibling?.className || '',
       shellBottom: shellRect?.bottom || 0,
       mapTop: mapRect?.top || 0,
       viewportHeight: innerHeight,
@@ -58,7 +62,7 @@ async function validate(page, pattern, screenshot, mobile = false) {
   if (state.price !== '$–' || state.lenses !== 5) throw new Error('Price or five-lens architecture is wrong');
   if (state.findings !== 3 || state.nextLabels.some((label) => !/^Next:/i.test(label))) throw new Error('Findings do not include actions');
   if (state.cta !== 'Personalise this check' || state.ctaHeight < 44) throw new Error('Primary CTA is invalid');
-  if (!state.oldHidden || !state.mapAfter || state.mapTop < state.shellBottom - 2) throw new Error('Legacy UI or map order is wrong');
+  if (!state.oldHidden || !state.mapAfter || state.mapTop < state.shellBottom - 2) throw new Error(`Legacy UI or map order is wrong: ${JSON.stringify({ oldHidden: state.oldHidden, oldDisplay: state.oldDisplay, mapAfter: state.mapAfter, nextClass: state.nextClass, shellBottom: state.shellBottom, mapTop: state.mapTop })}`);
   if (!mobile && state.shellBottom > state.viewportHeight + 8) throw new Error(`Decision cockpit misses first viewport: ${state.shellBottom}`);
   if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development)) throw new Error('Accessibility, overflow or score state failed');
   await page.screenshot({ path: `${outDir}/${screenshot}`, fullPage: true });
