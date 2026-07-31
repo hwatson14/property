@@ -95,7 +95,7 @@ try {
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   desktop.on('pageerror', error => failures.push(`desktop pageerror: ${error.message}`));
   desktop.on('console', message => { if (message.type() === 'error') failures.push(`desktop console: ${message.text()}`); });
-  const fryar = await validateReport(desktop, '4 Fryar Court Keperra QLD 4054', /4\s+Fryar\s+Court/i, 'live-fryar-desktop.png');
+  const fryar = await validateReport(desktop, '4 Fryar Court Keperra', /4\s+Fryar\s+Court/i, 'live-fryar-desktop.png');
   const annie = await validateReport(desktop, '28 Annie Street Hamilton QLD 4007', /28\s+Annie\s+Street/i, 'live-annie-desktop.png');
   if (fryar.propertyId === annie.propertyId) throw new Error('Second address reused first property');
   await desktop.close();
@@ -103,7 +103,7 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
   mobile.on('pageerror', error => failures.push(`mobile pageerror: ${error.message}`));
   mobile.on('console', message => { if (message.type() === 'error') failures.push(`mobile console: ${message.text()}`); });
-  const mobileResult = await validateReport(mobile, '4 Fryar Court Keperra QLD 4054', /4\s+Fryar\s+Court/i, 'live-fryar-mobile.png');
+  const mobileResult = await validateReport(mobile, '4 Fryar Court Keperra', /4\s+Fryar\s+Court/i, 'live-fryar-mobile.png');
   await mobile.close();
 
   if (failures.length) throw new Error(failures.join('\n'));
