@@ -29,61 +29,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build and verify live static site
+      - name: Build simplified static site
         run: |
-          rm -rf .pages-site
-          mkdir -p .pages-site
-          {
-            cat site/index.parts/part-0[0-4].b64.part
-            cat site/index.parts/part-05.fragments/*.b64.part
-            cat site/index.parts/part-06.b64.part
-          } | tr -d '\n\r' | base64 -d | gunzip > .pages-site/index.html
-          cat site/live-property.parts/*.js.part > .pages-site/live-property.js
-          python3 site/patch-live-search.py .pages-site/live-property.js
-          echo "cc3561dda4bda26473747f7f90a47f6145dd196166b6e8ff9442d0a0ab118faa  .pages-site/index.html" | sha256sum -c -
-          echo "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad  .pages-site/live-property.js" | sha256sum -c -
-          node --check .pages-site/live-property.js
-          cp site/favicon.svg site/enhancements.js site/enhancements.css site/map-initial-state.js site/decision-layer-guard.js site/decision-layer.js site/decision-layer.css site/decision-governance.js site/decision-governance.css site/shortlist.js site/shortlist.css .pages-site/
-          node --check .pages-site/enhancements.js
-          node --check .pages-site/map-initial-state.js
-          node --check .pages-site/decision-layer-guard.js
-          node --check .pages-site/decision-layer.js
-          node --check .pages-site/decision-governance.js
-          node --check .pages-site/shortlist.js
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('.pages-site/index.html')
-          s = p.read_text(encoding='utf-8')
-          head = '''  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-            <link rel="stylesheet" href="./enhancements.css">
-            <link rel="stylesheet" href="./decision-layer.css">
-            <link rel="stylesheet" href="./decision-governance.css">
-            <link rel="stylesheet" href="./shortlist.css">'''
-          scripts = '''  <script src="./enhancements.js"></script>
-            <script src="./map-initial-state.js"></script>
-            <script src="./decision-layer-guard.js"></script>
-            <script src="./decision-layer.js"></script>
-            <script src="./decision-governance.js"></script>
-            <script src="./shortlist.js"></script>'''
-          s = s.replace('</head>', f'{head}\n</head>', 1)
-          s = s.replace('</body>', f'{scripts}\n</body>', 1)
-          p.write_text(s, encoding='utf-8')
-          PY
-          grep -Fq '<script src="./live-property.js"></script>' .pages-site/index.html
-          grep -Fq 'href="./enhancements.css"' .pages-site/index.html
-          grep -Fq 'href="./decision-layer.css"' .pages-site/index.html
-          grep -Fq 'href="./decision-governance.css"' .pages-site/index.html
-          grep -Fq 'href="./shortlist.css"' .pages-site/index.html
-          grep -Fq 'src="./enhancements.js"' .pages-site/index.html
-          grep -Fq 'src="./map-initial-state.js"' .pages-site/index.html
-          grep -Fq 'src="./decision-layer-guard.js"' .pages-site/index.html
-          grep -Fq 'src="./decision-layer.js"' .pages-site/index.html
-          grep -Fq 'src="./decision-governance.js"' .pages-site/index.html
-          grep -Fq 'src="./shortlist.js"' .pages-site/index.html
-          grep -Fq 'LC-BNE-5L-v0.2.1' .pages-site/decision-governance.js
-          grep -Fq 'LC-COMPARE-v0.1.0' .pages-site/shortlist.js
-          ! grep -Fq 'leaflet' .pages-site/index.html
-          touch .pages-site/.nojekyll
+          python3 site/build-static.py .pages-site
+          grep -Fq 'LC-UX-v0.1.0' .pages-site/ux-simplification.js
+          grep -Fq 'src="./ux-simplification.js"' .pages-site/index.html
+          grep -Fq 'href="./ux-simplification.css"' .pages-site/index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -117,27 +68,27 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for deployed site
+      - name: Wait for simplified UX deployment
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
-          for i in {1..60}; do
-            if curl --fail --silent --location "$SITE_URL/shortlist.js" | grep -Fq 'LC-COMPARE-v0.1.0'; then
+          for i in {1..90}; do
+            if curl --fail --silent --location "$SITE_URL/ux-simplification.js" | grep -Fq 'LC-UX-v0.1.0'; then
               exit 0
             fi
             sleep 2
           done
-          echo "Deployed saved-comparison site did not become reachable: $SITE_URL"
+          echo "Simplified UX did not become reachable: $SITE_URL"
           exit 1
 
-      - name: Verify deployed site and live official sources
+      - name: Verify deployed live report
         env:
           PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/live-smoke.mjs
 
-      - name: Verify deployed saved-property comparison
+      - name: Verify deployed comparison
         env:
           PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
