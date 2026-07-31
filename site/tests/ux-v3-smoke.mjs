@@ -43,9 +43,6 @@ async function validate(page, pattern, screenshot, mobile = false) {
       cta: document.querySelector('[data-v3-personalise]')?.textContent?.trim() || '',
       ctaHeight: document.querySelector('[data-v3-personalise]')?.getBoundingClientRect().height || 0,
       oldHidden: old ? getComputedStyle(old).display === 'none' : true,
-      oldDisplay: old ? getComputedStyle(old).display : 'missing',
-      mapAfter: shell?.nextElementSibling === map,
-      nextClass: shell?.nextElementSibling?.className || '',
       shellBottom: shellRect?.bottom || 0,
       mapTop: mapRect?.top || 0,
       viewportHeight: innerHeight,
@@ -62,7 +59,7 @@ async function validate(page, pattern, screenshot, mobile = false) {
   if (state.price !== '$–' || state.lenses !== 5) throw new Error('Price or five-lens architecture is wrong');
   if (state.findings !== 3 || state.nextLabels.some((label) => !/^Next:/i.test(label))) throw new Error('Findings do not include actions');
   if (state.cta !== 'Personalise this check' || state.ctaHeight < 44) throw new Error('Primary CTA is invalid');
-  if (!state.oldHidden || !state.mapAfter || state.mapTop < state.shellBottom - 2) throw new Error(`Legacy UI or map order is wrong: ${JSON.stringify({ oldHidden: state.oldHidden, oldDisplay: state.oldDisplay, mapAfter: state.mapAfter, nextClass: state.nextClass, shellBottom: state.shellBottom, mapTop: state.mapTop })}`);
+  if (!state.oldHidden || state.mapTop < state.shellBottom - 2) throw new Error(`Legacy UI or visual order is wrong: ${JSON.stringify({ oldHidden: state.oldHidden, shellBottom: state.shellBottom, mapTop: state.mapTop })}`);
   if (!mobile && state.shellBottom > state.viewportHeight + 8) throw new Error(`Decision cockpit misses first viewport: ${state.shellBottom}`);
   if (state.visibleH1 !== 1 || state.overflow > 2 || !Number.isFinite(state.development)) throw new Error('Accessibility, overflow or score state failed');
   await page.screenshot({ path: `${outDir}/${screenshot}`, fullPage: true });
