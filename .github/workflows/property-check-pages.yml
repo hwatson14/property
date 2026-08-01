@@ -29,12 +29,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build simplified static site
+      - name: Build checks-first workspace
         run: |
           python3 site/build-static.py .pages-site
-          grep -Fq 'LC-UX-v0.1.0' .pages-site/ux-simplification.js
-          grep -Fq 'src="./ux-simplification.js"' .pages-site/index.html
-          grep -Fq 'href="./ux-simplification.css"' .pages-site/index.html
+          node --check .pages-site/checks-workspace-v5.js
+          node --check .pages-site/checks-workspace-map.js
+          node --check .pages-site/checks-workspace-v5-semantics.js
+          grep -Fq 'LC-UX-v0.5.0' .pages-site/checks-workspace-v5.js
+          grep -Fq 'LC-MAP-v0.2.0' .pages-site/checks-workspace-map.js
+          grep -Fq 'LC-WORKSPACE-SEMANTICS-v0.1.1' .pages-site/checks-workspace-v5-semantics.js
+          grep -Fq 'src="./checks-workspace-v5.js"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
+          ! grep -Fq 'src="./ux-simplification.js"' .pages-site/index.html
+          ! grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -68,25 +75,32 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for simplified UX deployment
+      - name: Wait for checks-first workspace deployment
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
-          for i in {1..90}; do
-            if curl --fail --silent --location "$SITE_URL/ux-simplification.js" | grep -Fq 'LC-UX-v0.1.0'; then
+          for i in {1..120}; do
+            if curl --fail --silent --location "$SITE_URL/checks-workspace-v5.js" | grep -Fq 'LC-UX-v0.5.0'; then
               exit 0
             fi
             sleep 2
           done
-          echo "Simplified UX did not become reachable: $SITE_URL"
+          echo "Checks-first workspace did not become reachable: $SITE_URL"
           exit 1
 
-      - name: Verify deployed live report
+      - name: Verify deployed workspace
         env:
           PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
           CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/live-smoke.mjs
+        run: node site/tests/workspace-v5-smoke.mjs
+
+      - name: Capture deployed summary views
+        env:
+          PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/workspace-v5-visual.mjs
 
       - name: Verify deployed comparison
         env:
@@ -94,6 +108,13 @@ jobs:
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/comparison-smoke.mjs
+
+      - name: Verify complete-data preview
+        env:
+          PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/full-preview-smoke.mjs
 
       - name: Upload deployed browser evidence
         if: always()
