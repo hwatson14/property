@@ -23,6 +23,7 @@ CSS_ASSETS = [
     "checks-workspace-v5.css",
     "checks-workspace-map.css",
     "checks-workspace-v5-responsive.css",
+    "checks-workspace-v5-polish.css",
 ]
 JS_ASSETS = [
     "decision-layer-guard.js",
