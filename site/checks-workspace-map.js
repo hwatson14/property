@@ -15,6 +15,7 @@
   let mode = "street";
   let selectedLayers = new Set();
   let resizeTimer = null;
+  let activePropertyId = "";
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({
@@ -87,7 +88,7 @@
   function initialiseSelection(data) {
     if (selectedLayers.size) return;
     (data.map_layers || []).forEach((layer) => {
-      if (layer.style_role === "parcel" || layer.visible_by_default) selectedLayers.add(layer.layer_id);
+      if (layer.style_role === "parcel" || layer.visible_by_default) selectedLayers.add(String(layer.layer_id));
     });
   }
 
@@ -96,7 +97,24 @@
     const data = window.PROPERTY_DATA;
     const host = visibleHost();
     if (!data?.property_id || !host) return;
+
+    const propertyId = String(data.property_id);
+    if (propertyId !== activePropertyId) {
+      activePropertyId = propertyId;
+      selectedLayers = new Set();
+      mode = "street";
+    }
     initialiseSelection(data);
+
+    const layers = data.map_layers || [];
+    let visibleLayers = layers.filter((layer) => selectedLayers.has(String(layer.layer_id)));
+    if (!visibleLayers.length && layers.length) {
+      selectedLayers = new Set();
+      layers.forEach((layer) => {
+        if (layer.style_role === "parcel" || layer.visible_by_default) selectedLayers.add(String(layer.layer_id));
+      });
+      visibleLayers = layers.filter((layer) => selectedLayers.has(String(layer.layer_id)));
+    }
 
     const width = Math.max(320, host.clientWidth || 720);
     const height = Math.max(220, host.clientHeight || (innerWidth < 760 ? 220 : 290));
@@ -136,8 +154,7 @@
     const overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     overlay.setAttribute("class", "context-map-overlay");
     overlay.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    (data.map_layers || []).forEach((layer) => {
-      if (!selectedLayers.has(layer.layer_id)) return;
+    visibleLayers.forEach((layer) => {
       const style = styleFor(layer.style_role);
       geometryPaths(layer.geometry).forEach(({ points, closed }) => {
         const coordinates = points.map(([lon, lat]) => {
@@ -172,10 +189,10 @@
 
     const chrome = document.createElement("div");
     chrome.className = "context-map-chrome";
-    chrome.innerHTML = `<div class="context-basemap-switch"><button type="button" data-basemap="street" class="${mode === "street" ? "active" : ""}">Street</button><button type="button" data-basemap="satellite" class="${mode === "satellite" ? "active" : ""}">Satellite</button></div><div class="context-layer-control"><strong>Map layers</strong>${(data.map_layers || []).map((layer) => `<label><input type="checkbox" data-layer-id="${escapeHtml(layer.layer_id)}" ${selectedLayers.has(layer.layer_id) ? "checked" : ""}><span style="--layer-colour:${styleFor(layer.style_role).stroke}"></span>${escapeHtml(layer.label || layer.category)}</label>`).join("")}</div><div class="context-map-attribution">${basemap.attribution} · Official outlines: Queensland Government and Brisbane City Council</div>`;
+    chrome.innerHTML = `<div class="context-basemap-switch"><button type="button" data-basemap="street" class="${mode === "street" ? "active" : ""}">Street</button><button type="button" data-basemap="satellite" class="${mode === "satellite" ? "active" : ""}">Satellite</button></div><div class="context-layer-control"><strong>Map layers</strong>${layers.map((layer) => `<label><input type="checkbox" data-layer-id="${escapeHtml(layer.layer_id)}" ${selectedLayers.has(String(layer.layer_id)) ? "checked" : ""}><span style="--layer-colour:${styleFor(layer.style_role).stroke}"></span>${escapeHtml(layer.label || layer.category)}</label>`).join("")}</div><div class="context-map-attribution">${basemap.attribution} · Official outlines: Queensland Government and Brisbane City Council</div>`;
     chrome.querySelectorAll("[data-basemap]").forEach((button) => button.addEventListener("click", () => { mode = button.dataset.basemap; render(); }));
     chrome.querySelectorAll("[data-layer-id]").forEach((input) => input.addEventListener("change", () => {
-      if (input.checked) selectedLayers.add(input.dataset.layerId); else selectedLayers.delete(input.dataset.layerId);
+      if (input.checked) selectedLayers.add(String(input.dataset.layerId)); else selectedLayers.delete(String(input.dataset.layerId));
       render();
     }));
 
@@ -193,6 +210,7 @@
     resizeTimer = setTimeout(render, 120);
   });
   setInterval(() => {
-    if (document.documentElement.classList.contains("lcw-active") && !visibleHost()?.querySelector("#context-property-map")) render();
+    const map = visibleHost()?.querySelector("#context-property-map");
+    if (document.documentElement.classList.contains("lcw-active") && (!map || !map.querySelector(".context-map-overlay path"))) render();
   }, 700);
 })();
