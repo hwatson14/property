@@ -24,7 +24,23 @@ async function openReport(page, query, pattern) {
       && document.querySelector('[data-ux-version="LC-UX-v0.5.0"]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
   await page.locator('.lcw-map-host #context-property-map').waitFor({ state: 'visible', timeout: 20000 });
-  await page.locator('.lcw-map-host .context-map-overlay path').first().waitFor({ state: 'attached', timeout: 20000 });
+  try {
+    await page.locator('.lcw-map-host .context-map-overlay path').first().waitFor({ state: 'attached', timeout: 8000 });
+  } catch (error) {
+    const debug = await page.evaluate(() => ({
+      propertyId: window.PROPERTY_DATA?.property_id,
+      mapLayerCount: window.PROPERTY_DATA?.map_layers?.length,
+      mapLayers: (window.PROPERTY_DATA?.map_layers || []).map(layer => ({ id: layer.layer_id, role: layer.style_role, type: layer.geometry?.type, coordinates: Array.isArray(layer.geometry?.coordinates) })),
+      parcelCount: window.PROPERTY_DATA?.parcels?.length,
+      mapVersion: document.querySelector('#context-property-map')?.dataset.mapVersion,
+      overlayExists: Boolean(document.querySelector('.lcw-map-host .context-map-overlay')),
+      overlayChildren: document.querySelector('.lcw-map-host .context-map-overlay')?.children.length,
+      checkedLayers: [...document.querySelectorAll('.lcw-map-host .context-layer-control input:checked')].map(input => input.dataset.layerId),
+      hostHtml: document.querySelector('.lcw-map-host')?.innerHTML?.slice(0, 2000),
+    }));
+    await page.screenshot({ path: `${outDir}/workspace-v5-map-failure.png`, fullPage: true });
+    throw new Error(`Official map geometry did not render: ${JSON.stringify(debug)}`);
+  }
   await page.waitForTimeout(500);
 }
 
