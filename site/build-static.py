@@ -24,6 +24,7 @@ CSS_ASSETS = [
     "checks-workspace-map.css",
     "checks-workspace-v5-responsive.css",
     "checks-workspace-v5-polish.css",
+    "checks-workspace-v5-semantics.css",
 ]
 JS_ASSETS = [
     "decision-layer-guard.js",
@@ -33,6 +34,7 @@ JS_ASSETS = [
     "full-report-preview.js",
     "checks-workspace-v5.js",
     "checks-workspace-map.js",
+    "checks-workspace-v5-semantics.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 
