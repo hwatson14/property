@@ -48,6 +48,8 @@ jobs:
           grep -Fq 'src="./checks-workspace-map.js"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-map.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5-responsive.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5-polish.css"' .pages-site/index.html
           ! grep -Fq 'src="./enhancements.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v3.js"' .pages-site/index.html
@@ -66,19 +68,19 @@ jobs:
           cat /tmp/property-check-http.log
           exit 1
 
-      - name: Diagnose mobile width
-        env:
-          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
-          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
-          CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/workspace-v5-mobile-diagnostic.mjs
-
       - name: Test checks-first workspace
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/workspace-v5-smoke.mjs
+
+      - name: Capture workspace summary views
+        env:
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/workspace-v5-visual.mjs
 
       - name: Test saved-property comparison
         env:
