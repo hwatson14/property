@@ -40,18 +40,21 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for checks-first workspace to be served
+      - name: Wait for complete checks-first workspace to be served
         run: |
           for i in {1..150}; do
             if curl --fail --silent --location --max-time 15 \
               https://hwatson14.github.io/property/checks-workspace-v5.js \
-              | grep -Fq 'LC-UX-v0.5.0'; then
-              echo "LemonCheck checks-first workspace v5 is deployed."
+              | grep -Fq 'LC-UX-v0.5.0' \
+              && curl --fail --silent --location --max-time 15 \
+              https://hwatson14.github.io/property/checks-workspace-v5-shortlist.js \
+              | grep -Fq 'LC-WORKSPACE-SHORTLIST-v0.1.0'; then
+              echo "LemonCheck checks-first workspace and owned shortlist are deployed."
               exit 0
             fi
             sleep 2
           done
-          echo "LemonCheck checks-first workspace v5 did not become available."
+          echo "Complete LemonCheck checks-first workspace did not become available."
           exit 1
 
       - name: Verify public checks-first workspace
@@ -68,7 +71,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/workspace-v5-visual.mjs
 
-      - name: Verify public comparison
+      - name: Verify public v5-owned comparison
         env:
           PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
