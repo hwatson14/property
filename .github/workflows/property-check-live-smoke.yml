@@ -40,10 +40,15 @@ jobs:
           python3 site/build-static.py .pages-site
           node --check .pages-site/live-property.js
           node --check .pages-site/checks-workspace-v5.js
+          node --check .pages-site/checks-workspace-map.js
           node --check .pages-site/full-report-preview.js
           grep -Fq 'LC-UX-v0.5.0' .pages-site/checks-workspace-v5.js
+          grep -Fq 'LC-MAP-v0.2.0' .pages-site/checks-workspace-map.js
           grep -Fq 'src="./checks-workspace-v5.js"' .pages-site/index.html
+          grep -Fq 'src="./checks-workspace-map.js"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-map.css"' .pages-site/index.html
+          ! grep -Fq 'src="./enhancements.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v3.js"' .pages-site/index.html
           ! grep -Fq 'src="./ux-overhaul.js"' .pages-site/index.html
