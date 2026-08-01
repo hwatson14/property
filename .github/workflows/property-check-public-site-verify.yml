@@ -1,12 +1,13 @@
 name: Verify deployed Property Check site
-# Release gate: LC-UX-v0.4.0
+# Controlled beta gate: LC-UX-v0.5.0
 
 on:
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/property-check-public-site-verify.yml"
-      - "site/tests/ux-v4-smoke.mjs"
+      - "site/tests/workspace-v5-smoke.mjs"
+      - "site/tests/workspace-v5-visual.mjs"
       - "site/tests/comparison-smoke.mjs"
       - "site/tests/full-preview-smoke.mjs"
   workflow_dispatch:
@@ -39,28 +40,38 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for clean decision interface to be served
+      - name: Wait for complete checks-first workspace to be served
         run: |
-          for i in {1..120}; do
+          for i in {1..150}; do
             if curl --fail --silent --location --max-time 15 \
-              https://hwatson14.github.io/property/decision-cockpit-v4.js \
-              | grep -Fq 'LC-UX-v0.4.0'; then
-              echo "LemonCheck clean UI v4 is deployed."
+              https://hwatson14.github.io/property/checks-workspace-v5.js \
+              | grep -Fq 'LC-UX-v0.5.0' \
+              && curl --fail --silent --location --max-time 15 \
+              https://hwatson14.github.io/property/checks-workspace-v5-shortlist.js \
+              | grep -Fq 'LC-WORKSPACE-SHORTLIST-v0.1.0'; then
+              echo "LemonCheck checks-first workspace and owned shortlist are deployed."
               exit 0
             fi
             sleep 2
           done
-          echo "LemonCheck clean UI v4 did not become available."
+          echo "Complete LemonCheck checks-first workspace did not become available."
           exit 1
 
-      - name: Verify public clean UI v4
+      - name: Verify public checks-first workspace
         env:
           PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
           CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/ux-v4-smoke.mjs
+        run: node site/tests/workspace-v5-smoke.mjs
 
-      - name: Verify public comparison
+      - name: Capture public summary views
+        env:
+          PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/workspace-v5-visual.mjs
+
+      - name: Verify public v5-owned comparison
         env:
           PROPERTY_CHECK_BASE_URL: https://hwatson14.github.io/property/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/public-artifacts
