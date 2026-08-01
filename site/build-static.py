@@ -16,22 +16,21 @@ LIVE_SHA256 = "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad"
 # The release build deliberately ships one active report UI. Earlier UX experiments
 # remain in git history but are no longer copied into the public artifact.
 CSS_ASSETS = [
-    "enhancements.css",
     "decision-layer.css",
     "decision-governance.css",
     "shortlist.css",
     "full-report-preview.css",
     "checks-workspace-v5.css",
+    "checks-workspace-map.css",
 ]
 JS_ASSETS = [
-    "enhancements.js",
-    "map-initial-state.js",
     "decision-layer-guard.js",
     "decision-layer.js",
     "decision-governance.js",
     "shortlist.js",
     "full-report-preview.js",
     "checks-workspace-v5.js",
+    "checks-workspace-map.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 
