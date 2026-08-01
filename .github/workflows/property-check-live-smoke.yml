@@ -42,13 +42,16 @@ jobs:
           node --check .pages-site/checks-workspace-v5.js
           node --check .pages-site/checks-workspace-map.js
           node --check .pages-site/checks-workspace-v5-semantics.js
+          node --check .pages-site/checks-workspace-v5-shortlist.js
           node --check .pages-site/full-report-preview.js
           grep -Fq 'LC-UX-v0.5.0' .pages-site/checks-workspace-v5.js
           grep -Fq 'LC-MAP-v0.2.0' .pages-site/checks-workspace-map.js
           grep -Fq 'LC-WORKSPACE-SEMANTICS-v0.1.1' .pages-site/checks-workspace-v5-semantics.js
+          grep -Fq 'LC-WORKSPACE-SHORTLIST-v0.1.0' .pages-site/checks-workspace-v5-shortlist.js
           grep -Fq 'src="./checks-workspace-v5.js"' .pages-site/index.html
           grep -Fq 'src="./checks-workspace-map.js"' .pages-site/index.html
           grep -Fq 'src="./checks-workspace-v5-semantics.js"' .pages-site/index.html
+          grep -Fq 'src="./checks-workspace-v5-shortlist.js"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-map.css"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5-responsive.css"' .pages-site/index.html
@@ -86,7 +89,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/workspace-v5-visual.mjs
 
-      - name: Test saved-property comparison
+      - name: Test v5-owned saved-property comparison
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts

@@ -36,10 +36,13 @@ jobs:
           node --check .pages-site/checks-workspace-v5.js
           node --check .pages-site/checks-workspace-map.js
           node --check .pages-site/checks-workspace-v5-semantics.js
+          node --check .pages-site/checks-workspace-v5-shortlist.js
           grep -Fq 'LC-UX-v0.5.0' .pages-site/checks-workspace-v5.js
           grep -Fq 'LC-MAP-v0.2.0' .pages-site/checks-workspace-map.js
           grep -Fq 'LC-WORKSPACE-SEMANTICS-v0.1.1' .pages-site/checks-workspace-v5-semantics.js
+          grep -Fq 'LC-WORKSPACE-SHORTLIST-v0.1.0' .pages-site/checks-workspace-v5-shortlist.js
           grep -Fq 'src="./checks-workspace-v5.js"' .pages-site/index.html
+          grep -Fq 'src="./checks-workspace-v5-shortlist.js"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
           ! grep -Fq 'src="./ux-simplification.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
@@ -76,17 +79,18 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Wait for checks-first workspace deployment
+      - name: Wait for complete checks-first workspace deployment
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
           for i in {1..120}; do
-            if curl --fail --silent --location "$SITE_URL/checks-workspace-v5.js" | grep -Fq 'LC-UX-v0.5.0'; then
+            if curl --fail --silent --location "$SITE_URL/checks-workspace-v5.js" | grep -Fq 'LC-UX-v0.5.0' \
+              && curl --fail --silent --location "$SITE_URL/checks-workspace-v5-shortlist.js" | grep -Fq 'LC-WORKSPACE-SHORTLIST-v0.1.0'; then
               exit 0
             fi
             sleep 2
           done
-          echo "Checks-first workspace did not become reachable: $SITE_URL"
+          echo "Complete checks-first workspace did not become reachable: $SITE_URL"
           exit 1
 
       - name: Verify deployed workspace
@@ -103,7 +107,7 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome
         run: node site/tests/workspace-v5-visual.mjs
 
-      - name: Verify deployed comparison
+      - name: Verify deployed v5-owned comparison
         env:
           PROPERTY_CHECK_BASE_URL: ${{ needs.deploy.outputs.page_url }}
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/deployed-artifacts
