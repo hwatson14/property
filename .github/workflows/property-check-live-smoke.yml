@@ -41,15 +41,19 @@ jobs:
           node --check .pages-site/live-property.js
           node --check .pages-site/checks-workspace-v5.js
           node --check .pages-site/checks-workspace-map.js
+          node --check .pages-site/checks-workspace-v5-semantics.js
           node --check .pages-site/full-report-preview.js
           grep -Fq 'LC-UX-v0.5.0' .pages-site/checks-workspace-v5.js
           grep -Fq 'LC-MAP-v0.2.0' .pages-site/checks-workspace-map.js
+          grep -Fq 'LC-WORKSPACE-SEMANTICS-v0.1.0' .pages-site/checks-workspace-v5-semantics.js
           grep -Fq 'src="./checks-workspace-v5.js"' .pages-site/index.html
           grep -Fq 'src="./checks-workspace-map.js"' .pages-site/index.html
+          grep -Fq 'src="./checks-workspace-v5-semantics.js"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-map.css"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5-responsive.css"' .pages-site/index.html
           grep -Fq 'href="./checks-workspace-v5-polish.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5-semantics.css"' .pages-site/index.html
           ! grep -Fq 'src="./enhancements.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
           ! grep -Fq 'src="./decision-cockpit-v3.js"' .pages-site/index.html
