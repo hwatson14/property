@@ -66,6 +66,13 @@ jobs:
           cat /tmp/property-check-http.log
           exit 1
 
+      - name: Diagnose mobile width
+        env:
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/workspace-v5-mobile-diagnostic.mjs
+
       - name: Test checks-first workspace
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
