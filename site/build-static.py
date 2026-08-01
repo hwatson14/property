@@ -35,6 +35,7 @@ JS_ASSETS = [
     "checks-workspace-v5.js",
     "checks-workspace-map.js",
     "checks-workspace-v5-semantics.js",
+    "checks-workspace-v5-shortlist.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 
