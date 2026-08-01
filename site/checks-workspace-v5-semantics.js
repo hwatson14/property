@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "LC-WORKSPACE-SEMANTICS-v0.1.0";
+  const VERSION = "LC-WORKSPACE-SEMANTICS-v0.1.1";
   const CHECK_IDS = {
     planning: ["planning.zone", "planning.heritage.state", "planning.heritage.reference", "planning.heritage.entry_date", "planning.character", "constraint.mapped_secondary_interests", null, null, null],
     hazards: ["flood.levels.assigned", "flood.fpa.overland_flow", "flood.flag.overland_flow", "flood.flag.large_allotment", "flood.coastal_hazard", "constraint.bushfire", "constraint.waterway_corridor", null],
@@ -45,7 +45,7 @@
   function officialAreaLabel() {
     const item = metric("property.parcel_area");
     const display = String(item?.display_value || "").trim();
-    if (display && !/^(0(?:\.0+)?\s*(?:m²|m2|ha|source units)?|not returned|not available|parcel source unavailable)$/i.test(display)) return display;
+    if (display && !/^(0(?:\.0+)?\s*(?:m²|m2|ha|source units)?|not returned|not available|parcel source unavailable|live source required|source unavailable)$/i.test(display)) return display;
     const numbers = [];
     const collect = (entry) => {
       if (Number.isFinite(Number(entry)) && Number(entry) > 0) numbers.push(Number(entry));
@@ -91,7 +91,7 @@
       const completed = states.filter((state) => ["complete", "issue", "attention"].includes(state)).length;
       const issues = states.filter((state) => state === "issue").length;
       const attentions = states.filter((state) => state === "attention").length;
-      const status = issues ? "issue" : attentions ? "attention" : completed === states.length ? "clear" : "not-started";
+      const status = issues ? "issue" : attentions || completed > 0 && completed < states.length ? "attention" : completed === states.length ? "clear" : "not-started";
       const label = ({ issue: "Issue found", attention: "Attention", clear: "No issues", "not-started": "Not started" })[status];
       const groupStatus = group.querySelector(".lcw-section-head .lcw-status");
       if (groupStatus) {
