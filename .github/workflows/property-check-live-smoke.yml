@@ -35,16 +35,30 @@ jobs:
           npm init -y
           npm install --no-save playwright-core@1.55.0
 
-      - name: Build clean decision interface
+      - name: Build checks-first workspace
         run: |
           python3 site/build-static.py .pages-site
           node --check .pages-site/live-property.js
+          node --check .pages-site/checks-workspace-v5.js
+          node --check .pages-site/checks-workspace-map.js
+          node --check .pages-site/checks-workspace-v5-semantics.js
           node --check .pages-site/full-report-preview.js
-          node --check .pages-site/decision-cockpit-v4.js
-          node --check .pages-site/decision-cockpit-v4-polish.js
-          grep -Fq 'LC-UX-v0.4.0' .pages-site/decision-cockpit-v4.js
-          grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
-          grep -Fq 'href="./decision-cockpit-v4.css"' .pages-site/index.html
+          grep -Fq 'LC-UX-v0.5.0' .pages-site/checks-workspace-v5.js
+          grep -Fq 'LC-MAP-v0.2.0' .pages-site/checks-workspace-map.js
+          grep -Fq 'LC-WORKSPACE-SEMANTICS-v0.1.1' .pages-site/checks-workspace-v5-semantics.js
+          grep -Fq 'src="./checks-workspace-v5.js"' .pages-site/index.html
+          grep -Fq 'src="./checks-workspace-map.js"' .pages-site/index.html
+          grep -Fq 'src="./checks-workspace-v5-semantics.js"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-map.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5-responsive.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5-polish.css"' .pages-site/index.html
+          grep -Fq 'href="./checks-workspace-v5-semantics.css"' .pages-site/index.html
+          ! grep -Fq 'src="./enhancements.js"' .pages-site/index.html
+          ! grep -Fq 'src="./decision-cockpit-v4.js"' .pages-site/index.html
+          ! grep -Fq 'src="./decision-cockpit-v3.js"' .pages-site/index.html
+          ! grep -Fq 'src="./ux-overhaul.js"' .pages-site/index.html
+          ! grep -Fq 'src="./ux-simplification.js"' .pages-site/index.html
           ! grep -Fq 'leaflet' .pages-site/index.html
 
       - name: Start static site
@@ -58,12 +72,19 @@ jobs:
           cat /tmp/property-check-http.log
           exit 1
 
-      - name: Test clean UI v4
+      - name: Test checks-first workspace
         env:
           PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
           PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
           CHROME_PATH: /usr/bin/google-chrome
-        run: node site/tests/ux-v4-smoke.mjs
+        run: node site/tests/workspace-v5-smoke.mjs
+
+      - name: Capture workspace summary views
+        env:
+          PROPERTY_CHECK_BASE_URL: http://127.0.0.1:8000/
+          PROPERTY_CHECK_ARTIFACT_DIR: site/tests/artifacts
+          CHROME_PATH: /usr/bin/google-chrome
+        run: node site/tests/workspace-v5-visual.mjs
 
       - name: Test saved-property comparison
         env:

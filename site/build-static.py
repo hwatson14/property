@@ -13,38 +13,28 @@ ROOT = Path(__file__).resolve().parent
 INDEX_SHA256 = "cc3561dda4bda26473747f7f90a47f6145dd196166b6e8ff9442d0a0ab118faa"
 LIVE_SHA256 = "2f2f5b3150023412efa8c7b957090700b6d12b74ec81c6b252257a817d19afad"
 
+# The release build deliberately ships one active report UI. Earlier UX experiments
+# remain in git history but are no longer copied into the public artifact.
 CSS_ASSETS = [
-    "enhancements.css",
     "decision-layer.css",
     "decision-governance.css",
     "shortlist.css",
-    "ux-simplification.css",
     "full-report-preview.css",
-    "ux-overhaul.css",
-    "ux-overhaul-detail.css",
-    "decision-cockpit-v3.css",
-    "decision-cockpit-v3-polish.css",
-    "decision-cockpit-v4.css",
-    "decision-cockpit-v4-polish.css",
+    "checks-workspace-v5.css",
+    "checks-workspace-map.css",
+    "checks-workspace-v5-responsive.css",
+    "checks-workspace-v5-polish.css",
+    "checks-workspace-v5-semantics.css",
 ]
 JS_ASSETS = [
-    "enhancements.js",
-    "map-initial-state.js",
     "decision-layer-guard.js",
     "decision-layer.js",
     "decision-governance.js",
     "shortlist.js",
-    "ux-simplification.js",
     "full-report-preview.js",
-    "ux-overhaul.js",
-    "ux-overhaul-sync.js",
-    "ux-overhaul-polish.js",
-    "ux-overhaul-actions.js",
-    "decision-cockpit-v3.js",
-    "decision-cockpit-v3-order.js",
-    "decision-cockpit-v3-polish.js",
-    "decision-cockpit-v4.js",
-    "decision-cockpit-v4-polish.js",
+    "checks-workspace-v5.js",
+    "checks-workspace-map.js",
+    "checks-workspace-v5-semantics.js",
 ]
 COPY_ASSETS = ["favicon.svg", *CSS_ASSETS, *JS_ASSETS]
 

@@ -22,12 +22,14 @@ async function openProperty(query, pattern) {
   await page.waitForFunction(({ source, flags }) => {
     const regex = new RegExp(source, flags);
     return regex.test(window.PROPERTY_DATA?.canonical_address || '')
-      && regex.test(document.querySelector('.lc-v4-property-header h1')?.textContent || '')
+      && regex.test(document.querySelector('.lcw-property-copy h1')?.textContent || '')
       && window.LEMONCHECK_ASSESSMENT?.governanceVersion === 'LC-BNE-5L-v0.2.1'
-      && document.querySelector('[data-ux-version="LC-UX-v0.4.0"]');
+      && document.querySelector('[data-ux-version="LC-UX-v0.5.0"]')
+      && window.LemonCheckWorkspace
+      && document.querySelector('[data-save-property]');
   }, { source: pattern.source, flags: pattern.flags }, { timeout: 75000 });
 
-  await page.locator('[data-v4-save]:visible').click();
+  await page.evaluate(() => window.LemonCheckWorkspace.saveCurrent());
   await page.waitForFunction(() => {
     const items = JSON.parse(localStorage.getItem('lemoncheck-shortlist-v1') || '[]');
     return items.some(item => String(item.propertyId) === String(window.PROPERTY_DATA?.property_id));
@@ -50,7 +52,7 @@ try {
   if (annie.propertyId === william.propertyId) throw new Error('Second saved property reused first property ID');
   if (annie.deal !== null || william.deal !== null) throw new Error('Comparison should preserve pending Deal Scores without automated pricing');
 
-  await page.locator('[data-v4-compare]:visible').click();
+  await page.evaluate(() => window.LemonCheckWorkspace.openCompare());
   const dialog = page.locator('#lemoncheck-compare-dialog[open]');
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   const state = await page.evaluate(() => {

@@ -1,0 +1,17 @@
+@media(max-width:760px){
+  .lcw-app,.lcw-desktop-shell,.lcw-main,.lcw-main-inner,.lcw-view,.lcw-content-grid,.lcw-center,.lcw-card,.lcw-section,.lcw-map-card,.lcw-map-host,.lcw-mobile-meaning{min-width:0!important;max-width:100%!important}
+  .lcw-main,.lcw-main-inner,.lcw-view,.lcw-content-grid,.lcw-center{width:100%!important}
+  .lcw-center{grid-template-columns:minmax(0,1fr)!important;overflow:visible!important}
+  .lcw-card,.lcw-section,.lcw-map-card{width:100%!important;overflow:hidden!important}
+  .lcw-map-host{width:100%!important;overflow:hidden!important;contain:layout paint}
+  .lcw-map-host #context-property-map{width:100%!important;max-width:100%!important;overflow:hidden!important}
+  .lcw-map-host .context-map-tiles{max-width:100%!important;overflow:hidden!important}
+  .lcw-map-chips{width:100%!important;min-width:0!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior-x:contain}
+  .lcw-section-head{min-width:0!important;max-width:100%!important}
+  .lcw-section-head h2{min-width:0!important;overflow-wrap:anywhere}
+  .lcw-property-copy,.lcw-property-facts,.lcw-recommendation,.lcw-recommendation-lead,.lcw-recommendation-metric,.lcw-issue,.lcw-issue-copy,.lcw-category-list,.lcw-category-row,.lcw-category-copy{min-width:0!important;max-width:100%!important}
+  .lcw-property-facts span{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lcw-recommendation-metric strong,.lcw-issue-meta b,.lcw-category-copy strong{overflow-wrap:anywhere}
+  .lcw-mobile-bottom{left:8px!important;right:8px!important;width:auto!important;min-width:0!important;max-width:calc(100vw - 16px)!important;grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .lcw-mobile-nav{width:100%!important;min-width:0!important;max-width:100%!important;overflow:hidden!important}
+}
