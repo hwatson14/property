@@ -1,0 +1,140 @@
+(() => {
+  "use strict";
+
+  const QSCF = "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/QSCF_LandParcelPropertyFramework/FeatureServer";
+  const BCC = "https://data.brisbane.qld.gov.au/api/explore/v2.1/catalog/datasets";
+  const DEMO = {
+    address: "28 Annie Street, Hamilton QLD 4007",
+    lotplan: "2RP154140 · verified demonstration",
+    note: "Open the verified fixture report",
+    source_mode: "fixture",
+    route: "#/report",
+  };
+
+  const datasets = {
+    zoning: {
+      id: "cp14-zoning-overlay",
+      name: "City Plan 2014 — Zoning overlay",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-zoning-overlay/",
+    },
+    character: {
+      id: "cp14-dwelling-house-character-overlay",
+      name: "City Plan 2014 — Dwelling house character overlay",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-dwelling-house-character-overlay/",
+    },
+    stateHeritage: {
+      id: "cp14-heritage-overlay-state-heritage-area",
+      name: "City Plan 2014 — Heritage overlay — State heritage area",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-heritage-overlay-state-heritage-area/",
+    },
+    localHeritage: {
+      id: "cp14-heritage-overlay-local-heritage-area",
+      name: "City Plan 2014 — Heritage overlay — Local heritage area",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-heritage-overlay-local-heritage-area/",
+    },
+    pre1911: {
+      id: "cp14-pre-1911-building-overlay",
+      name: "City Plan 2014 — Pre-1911 building overlay",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-pre-1911-building-overlay/",
+    },
+    bushfire: {
+      id: "cp14-bushfire-overlay",
+      name: "City Plan 2014 — Bushfire overlay",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-bushfire-overlay/",
+    },
+    waterway: {
+      id: "cp14-waterway-corridors-overlay-waterway-corridors",
+      name: "City Plan 2014 — Waterway corridors overlay",
+      url: "https://data.brisbane.qld.gov.au/explore/dataset/cp14-waterway-corridors-overlay-waterway-corridors/",
+    },
+  };
+
+  const nativeFetch = window.fetch.bind(window);
+  const cache = new Map();
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const escSql = (value) => String(value ?? "").replaceAll("'", "''");
+  const escOds = (value) => String(value ?? "").replaceAll('"', '\\"');
+  const uniq = (values) => [...new Set(values.filter((value) => value !== null && value !== undefined && String(value).trim() !== ""))];
+  const nowIso = () => new Date().toISOString();
+  const safeId = (value) => String(value ?? "").replace(/[^a-zA-Z0-9-]/g, "-");
+  const escapeHtml = (value) => String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+  async function fetchJson(url, options = {}) {
+    const cacheKey = options.cacheKey || url;
+    if (options.cache !== false && cache.has(cacheKey)) return cache.get(cacheKey);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), options.timeout || 18000);
+    try {
+      const response = await nativeFetch(url, {
+        headers: { Accept: "application/json", ...(options.headers || {}) },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const payload = await response.json();
+      if (payload?.error) throw new Error(payload.error.message || "Source returned an error");
+      if (options.cache !== false) cache.set(cacheKey, payload);
+      return payload;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  function arcgisQueryUrl(layer, params = {}) {
+    const url = new URL(`${QSCF}/${layer}/query`);
+    const defaults = {
+      f: "json",
+      where: "1=1",
+      outFields: "*",
+      returnGeometry: "true",
+      outSR: "4326",
+      geometryPrecision: "6",
+      returnTrueCurves: "false",
+    };
+    Object.entries({ ...defaults, ...params }).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
+    });
+    return url.toString();
+  }
+
+  function normaliseSearchText(value) {
+    return String(value || "")
+      .toUpperCase()
+      .replace(/\bST\b/g, "STREET")
+      .replace(/\bRD\b/g, "ROAD")
+      .replace(/\bAVE\b/g, "AVENUE")
+      .replace(/\bCT\b/g, "COURT")
+      .replace(/\bCRES\b/g, "CRESCENT")
+      .replace(/[^A-Z0-9/ -]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+
+  function formatAddress(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+      .replace(/\bQld\b/g, "QLD")
+      .replace(/\bPo Box\b/g, "PO Box");
+  }
+
+  function featureAttributes(feature) {
+    return feature?.attributes || feature?.properties || {};
+  }
+
+  async function searchAddresses(rawQuery) {
+    const query = normaliseSearchText(rawQuery);
+    const tokens = query.split(" ").filter((token) => token.length >= 2).slice(0, 8);
+    if (!tokens.length) return [];
+    const conditions = tokens.map((token) => `UPPER(address) LIKE '%${escSql(token)}%'`);
+    conditions.push("UPPER(local_authority) = 'BRISBANE CITY'");
+    const url = arcgisQueryUrl(0, {
+      where: conditions.join(" AND "),
+      outFields: "address,address_pid,lotplan,lot,plan,locality,local_authority,state,latitude,longitude",
+      returnGeometry: "true",
